@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,7 +8,7 @@ namespace OutlookAI.Tests.Helpers
     /// <summary>
     /// Scripted dispatcher for chat-service tests. Caller queues (name &#x2192;
     /// response JSON) in the order the model is expected to call them. Used
-    /// by <c>CodexChatServiceMultiRoundTests</c> first; later picked up by
+    /// by <c>LiteLlmChatServiceMultiRoundTests</c> first; later picked up by
     /// any test that needs to drive <c>RunTurnAsync</c> through tool rounds
     /// without spinning up the real Outlook surface.
     /// </summary>

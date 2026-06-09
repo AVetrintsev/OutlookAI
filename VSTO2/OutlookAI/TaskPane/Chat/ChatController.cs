@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Linq;
 using System.Threading;
@@ -17,14 +17,14 @@ namespace OutlookAI.TaskPane.Chat
 {
     /// <summary>
     /// Owns the Chat tab's WebView2 lifecycle and the JS&#x2194;C# bridge that
-    /// wires user input into <see cref="CodexChatService.RunTurnAsync"/>.
+    /// wires user input into <see cref="LiteLlmChatService.RunTurnAsync"/>.
     /// Per-Inspector instance, constructed by <see cref="AITaskPane"/> after
     /// <see cref="AITaskPane.Bind"/> hands it the tool host + surface.
     /// </summary>
     public sealed class ChatController : IDisposable
     {
         private readonly Control _hostContainer;
-        private readonly CodexChatService _chat;
+        private readonly LiteLlmChatService _chat;
         private readonly IToolHost _toolHost;
         private readonly LiveOutlookSurface _surface;
         private readonly ConversationStore _store;
@@ -41,7 +41,7 @@ namespace OutlookAI.TaskPane.Chat
 
         public ChatController(
             Control hostContainer,
-            CodexChatService chat,
+            LiteLlmChatService chat,
             IToolHost toolHost,
             LiveOutlookSurface surface,
             ConversationStore store)

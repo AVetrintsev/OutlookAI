@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -185,14 +185,14 @@ namespace OutlookAI.TaskPane
             panelResult.Location = new Point(panelResult.Location.X, panelResult.Location.Y + 60);
         }
 
-        private CodexChatService ChatService
+        private LiteLlmChatService ChatService
             => Globals.ThisAddIn != null ? Globals.ThisAddIn.ChatService : null;
 
-        private RealtimeVoiceService VoiceService
+        private LiteLlmVoiceService VoiceService
             => Globals.ThisAddIn != null ? Globals.ThisAddIn.VoiceService : null;
 
-        private CodexAuthService AuthService
-            => Globals.ThisAddIn != null ? Globals.ThisAddIn.AuthService : null;
+        private LiteLlmCredentialService CredentialService
+            => Globals.ThisAddIn != null ? Globals.ThisAddIn.CredentialService : null;
 
         /// <summary>
         /// Call this when the task pane becomes visible for a new email.
@@ -207,8 +207,8 @@ namespace OutlookAI.TaskPane
         }
 
         // -------------------------------------------------------------------
-        // Voice capture (mic) — streams raw 16-kHz / 16-bit / mono PCM into
-        // a MemoryStream, then hands that stream to RealtimeVoiceService.
+        // Voice capture (mic) вЂ” streams raw 16-kHz / 16-bit / mono PCM into
+        // a MemoryStream, then hands that stream to LiteLlmVoiceService.
         // No more on-disk WAV; no more REST POST to /v1/audio/transcriptions.
         // -------------------------------------------------------------------
 
@@ -222,7 +222,7 @@ namespace OutlookAI.TaskPane
 
             try
             {
-                if (!RequireSignedIn("Sign in to OutlookAI before using voice input."))
+                if (!RequireSignedIn("Configure your LiteLLM API key before using voice input."))
                 {
                     return;
                 }
@@ -382,37 +382,37 @@ namespace OutlookAI.TaskPane
         }
 
         // -------------------------------------------------------------------
-        // Text actions — all routed through CodexChatService -> Codex backend.
+        // Text actions - all routed through LiteLlmChatService.
         // -------------------------------------------------------------------
 
         private async void btnProofread_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Proofread);
+            await ProcessAction(LiteLlmChatService.ActionType.Proofread);
         }
 
         private async void btnRevise_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Revise);
+            await ProcessAction(LiteLlmChatService.ActionType.Revise);
         }
 
         private async void btnShorten_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Shorten);
+            await ProcessAction(LiteLlmChatService.ActionType.Shorten);
         }
 
         private async void btnLengthen_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Lengthen);
+            await ProcessAction(LiteLlmChatService.ActionType.Lengthen);
         }
 
         private async void btnFormal_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Formal);
+            await ProcessAction(LiteLlmChatService.ActionType.Formal);
         }
 
         private async void btnFriendly_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Friendly);
+            await ProcessAction(LiteLlmChatService.ActionType.Friendly);
         }
 
         private async void btnDraft_Click(object sender, EventArgs e)
@@ -422,10 +422,10 @@ namespace OutlookAI.TaskPane
                 ShowStatus("Please enter instructions for the email you want to draft.", true);
                 return;
             }
-            await ProcessAction(CodexChatService.ActionType.Draft, txtDraftPrompt.Text);
+            await ProcessAction(LiteLlmChatService.ActionType.Draft, txtDraftPrompt.Text);
         }
 
-        private async Task ProcessAction(CodexChatService.ActionType action, string prompt = "")
+        private async Task ProcessAction(LiteLlmChatService.ActionType action, string prompt = "")
         {
             TraceLog.Write(">> ProcessAction " + action, "AITaskPane");
             if (_isRecording)
@@ -433,7 +433,7 @@ namespace OutlookAI.TaskPane
                 CleanupRecording();
             }
 
-            if (!RequireSignedIn("Sign in to OutlookAI before using AI actions."))
+            if (!RequireSignedIn("Configure your LiteLLM API key before using AI actions."))
             {
                 return;
             }
@@ -446,13 +446,13 @@ namespace OutlookAI.TaskPane
             }
 
             string emailContent = GetEmailBody();
-            if (action != CodexChatService.ActionType.Draft && string.IsNullOrWhiteSpace(emailContent))
+            if (action != LiteLlmChatService.ActionType.Draft && string.IsNullOrWhiteSpace(emailContent))
             {
                 ShowStatus("No email content found. Please write something first.", true);
                 return;
             }
 
-            if (action == CodexChatService.ActionType.Draft && emailContent.Length > 4000)
+            if (action == LiteLlmChatService.ActionType.Draft && emailContent.Length > 4000)
             {
                 emailContent = emailContent.Substring(0, 4000) + "\n[... earlier messages truncated ...]";
             }
@@ -466,11 +466,11 @@ namespace OutlookAI.TaskPane
                 + "not require any tools.";
             var ctx = new ConversationContext
             {
-                SystemInstructions = CodexChatService.GetSystemPrompt(action) + toolAddendum,
+                SystemInstructions = LiteLlmChatService.GetSystemPrompt(action) + toolAddendum,
                 IncludeWriteTools = Config.WriteToolsEnabled
             };
 
-            var userMessage = CodexChatService.BuildUserMessage(action, emailContent, prompt ?? "");
+            var userMessage = LiteLlmChatService.BuildUserMessage(action, emailContent, prompt ?? "");
             var toolHost = _toolHost ?? new OutlookToolHost(new NullSurface(), includeWriteTools: false);
             var sink = new ActionsTabSink(this);
 
@@ -764,23 +764,23 @@ namespace OutlookAI.TaskPane
 
         private bool RequireSignedIn(string promptMessage)
         {
-            var auth = AuthService;
-            if (auth == null)
+            var credentials = CredentialService;
+            if (credentials == null)
             {
-                ShowStatus("Auth service unavailable. Restart Outlook.", true);
+                ShowStatus("Credential service unavailable. Restart Outlook.", true);
                 return false;
             }
-            var status = auth.GetStatus();
-            if (status.State == AuthState.Authenticated)
+            var status = credentials.GetStatus();
+            if (status.State == CredentialState.Configured)
             {
                 return true;
             }
             ShowStatus(promptMessage, true);
-            using (var settingsForm = new SettingsForm(auth))
+            using (var settingsForm = new SettingsForm(credentials))
             {
                 settingsForm.ShowDialog();
             }
-            return auth.GetStatus().State == AuthState.Authenticated;
+            return credentials.GetStatus().State == CredentialState.Configured;
         }
 
         partial void DisposeCustomResources()

@@ -26,7 +26,7 @@ namespace OutlookAI.Tests
             Assert.Equal("https://litellm.example.com/v1", Config.LiteLlmBaseUrl);
             Assert.Equal("", Config.LiteLlmApiKey);
             Assert.Equal("gpt-4.1-mini", Config.Model);
-            Assert.Equal("gpt-4o-mini-transcribe", Config.VoiceModel);
+            Assert.Equal("", Config.VoiceModel);
             Assert.Equal(0.2, Config.Temperature);
             Assert.Equal(4096, Config.MaxTokens);
         }
@@ -50,6 +50,17 @@ namespace OutlookAI.Tests
             Assert.Equal("company/transcribe", Config.VoiceModel);
             Assert.Equal(0.7, Config.Temperature);
             Assert.Equal(8192, Config.MaxTokens);
+        }
+
+        [Fact]
+        public void LoadConfigFromPaths_EmptyVoiceModelDisablesTranscription()
+        {
+            var (g, u) = MakeTempPaths();
+            File.WriteAllText(g, "<Config><VoiceModel></VoiceModel></Config>");
+
+            Config.LoadConfigFromPaths(g, u);
+
+            Assert.Equal("", Config.VoiceModel);
         }
 
         [Fact]

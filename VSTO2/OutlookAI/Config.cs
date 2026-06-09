@@ -20,7 +20,7 @@ namespace OutlookAI
 
         public const string DefaultLiteLlmBaseUrl = "https://litellm.example.com/v1";
         public const string DefaultModel = "gpt-4.1-mini";
-        public const string DefaultVoiceModel = "gpt-4o-mini-transcribe";
+        public const string DefaultVoiceModel = "";
         public const string DefaultReasoningEffort = "None";
         public const double DefaultTemperature = 0.2;
         public const int DefaultMaxTokens = 4096;
@@ -205,7 +205,7 @@ namespace OutlookAI
                 }
 
                 var voiceModel = root.Element("VoiceModel") ?? root.Element("LiteLlmVoiceModel");
-                if (voiceModel != null && !string.IsNullOrWhiteSpace(voiceModel.Value))
+                if (voiceModel != null)
                 {
                     VoiceModel = voiceModel.Value.Trim();
                 }

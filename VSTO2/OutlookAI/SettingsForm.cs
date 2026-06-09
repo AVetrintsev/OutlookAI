@@ -127,7 +127,7 @@ namespace OutlookAI
 
             var lblVoiceModel = new Label
             {
-                Text = "Voice model: " + Config.VoiceModel,
+                Text = "Voice model: " + (string.IsNullOrWhiteSpace(Config.VoiceModel) ? "(disabled)" : Config.VoiceModel),
                 Location = new Point(15, 69),
                 Size = new Size(370, 20),
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Regular)

@@ -10,15 +10,25 @@
     The LiteLLM API key is intentionally not requested or embedded.
 #>
 
+param(
+    [switch]$NoPause
+)
+
 $ErrorActionPreference = "Stop"
 
 function Read-Value {
     param(
         [Parameter(Mandatory=$true)][string]$Prompt,
-        [Parameter(Mandatory=$true)][string]$DefaultValue
+        [AllowEmptyString()][string]$DefaultValue = ""
     )
 
-    $value = Read-Host "$Prompt [$DefaultValue]"
+    $displayPrompt = if ([string]::IsNullOrEmpty($DefaultValue)) {
+        $Prompt
+    } else {
+        "$Prompt [$DefaultValue]"
+    }
+
+    $value = Read-Host $displayPrompt
     if ([string]::IsNullOrWhiteSpace($value)) {
         return $DefaultValue
     }
@@ -71,63 +81,118 @@ function Read-Tag {
     }
 }
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$builder = Join-Path $repoRoot "Deploy\Make-InstallerExe.ps1"
+function Normalize-OptionalValue {
+    param([AllowEmptyString()][string]$Value)
 
-if (-not (Test-Path -LiteralPath $builder)) {
-    throw "Build script was not found: $builder"
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return ""
+    }
+
+    $trimmed = $Value.Trim()
+    if ($trimmed -in @("null", "none", "no", "off", "-")) {
+        return ""
+    }
+
+    return $trimmed
 }
 
-Write-Host ""
-Write-Host "OutlookAI single-file installer builder" -ForegroundColor Cyan
-Write-Host "Press Enter to accept the value in brackets." -ForegroundColor Gray
-Write-Host "LiteLLM API keys are not requested and will not be embedded." -ForegroundColor Gray
-Write-Host ""
+function Wait-BeforeExit {
+    param([int]$ExitCode)
 
-$tag = Read-Tag
-$outDir = Read-Value -Prompt "Output directory" -DefaultValue "out"
-$baseUrl = Read-Value -Prompt "LiteLLM base URL" -DefaultValue "https://litellm.company.example/v1"
-$model = Read-Value -Prompt "LiteLLM chat model" -DefaultValue "company/outlook-chat"
-$voiceModel = Read-Value -Prompt "LiteLLM voice model" -DefaultValue "company/outlook-transcribe"
-$temperature = Read-DoubleValue -Prompt "Temperature" -DefaultValue 0.2
-$maxTokens = Read-IntValue -Prompt "Max tokens" -DefaultValue 4096
-$maxBulkExportRows = Read-IntValue -Prompt "Max bulk export rows" -DefaultValue 2000
-$certThumbprint = Read-Value -Prompt "Manifest certificate thumbprint (optional)" -DefaultValue ""
+    if (-not $NoPause) {
+        Write-Host ""
+        Read-Host "Press Enter to close this window"
+    }
 
-$arguments = @{
-    Tag = $tag
-    OutDir = $outDir
-    LiteLlmBaseUrl = $baseUrl
-    LiteLlmModel = $model
-    LiteLlmVoiceModel = $voiceModel
-    Temperature = $temperature
-    MaxTokens = $maxTokens
-    MaxBulkExportRows = $maxBulkExportRows
+    exit $ExitCode
 }
 
-if (-not [string]::IsNullOrWhiteSpace($certThumbprint)) {
-    $arguments.CertThumbprint = $certThumbprint
+try {
+    $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+    $builder = Join-Path $repoRoot "Deploy\Make-InstallerExe.ps1"
+
+    if (-not (Test-Path -LiteralPath $builder)) {
+        throw "Build script was not found: $builder"
+    }
+
+    Write-Host ""
+    Write-Host "OutlookAI single-file installer builder" -ForegroundColor Cyan
+    Write-Host "Press Enter to accept the value in brackets." -ForegroundColor Gray
+    Write-Host "LiteLLM API keys are not requested and will not be embedded." -ForegroundColor Gray
+    Write-Host ""
+
+    $tag = Read-Tag
+    $outDir = Read-Value -Prompt "Output directory" -DefaultValue "out"
+    $baseUrl = Read-Value -Prompt "LiteLLM base URL" -DefaultValue "https://litellm.company.example/v1"
+    $model = Read-Value -Prompt "LiteLLM chat model" -DefaultValue "company/outlook-chat"
+    $voiceModel = Normalize-OptionalValue (Read-Value -Prompt "LiteLLM voice model (optional, empty/null disables transcription)" -DefaultValue "")
+    $temperature = Read-DoubleValue -Prompt "Temperature" -DefaultValue 0.2
+    $maxTokens = Read-IntValue -Prompt "Max tokens" -DefaultValue 4096
+    $maxBulkExportRows = Read-IntValue -Prompt "Max bulk export rows" -DefaultValue 2000
+    $certThumbprint = Read-Value -Prompt "Manifest certificate thumbprint (optional)" -DefaultValue ""
+
+    $arguments = @{
+        Tag = $tag
+        OutDir = $outDir
+        LiteLlmBaseUrl = $baseUrl
+        LiteLlmModel = $model
+        LiteLlmVoiceModel = $voiceModel
+        Temperature = $temperature
+        MaxTokens = $maxTokens
+        MaxBulkExportRows = $maxBulkExportRows
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($certThumbprint)) {
+        $arguments.CertThumbprint = $certThumbprint
+    }
+
+    Write-Host ""
+    Write-Host "Building installer..." -ForegroundColor Cyan
+    & $builder @arguments
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Make-InstallerExe.ps1 failed with exit code $LASTEXITCODE."
+    }
+
+    $resolvedOutDir = if ([System.IO.Path]::IsPathRooted($outDir)) {
+        $outDir
+    } else {
+        Join-Path $repoRoot $outDir
+    }
+    $exePath = Join-Path $resolvedOutDir "OutlookAI-$tag-Setup.exe"
+
+    if (-not (Test-Path -LiteralPath $exePath)) {
+        throw "Expected installer EXE was not found: $exePath"
+    }
+
+    Write-Host ""
+    Write-Host "Built: $exePath" -ForegroundColor Green
+    if (-not $NoPause) {
+        try {
+            Start-Process -FilePath "explorer.exe" -ArgumentList "/select,`"$exePath`""
+        } catch {
+            Write-Host "Could not open Explorer: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
 }
+catch {
+    Write-Host ""
+    Write-Host "OutlookAI installer build failed." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Error:" -ForegroundColor Yellow
+    Write-Host $_.Exception.Message -ForegroundColor Red
 
-Write-Host ""
-Write-Host "Building installer..." -ForegroundColor Cyan
-& $builder @arguments
+    if ($_.InvocationInfo) {
+        Write-Host ""
+        Write-Host "Location:" -ForegroundColor Yellow
+        Write-Host $_.InvocationInfo.PositionMessage
+    }
 
-if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+    if ($_.ScriptStackTrace) {
+        Write-Host ""
+        Write-Host "Stack trace:" -ForegroundColor Yellow
+        Write-Host $_.ScriptStackTrace
+    }
+
+    Wait-BeforeExit -ExitCode 1
 }
-
-$resolvedOutDir = if ([System.IO.Path]::IsPathRooted($outDir)) {
-    $outDir
-} else {
-    Join-Path $repoRoot $outDir
-}
-$exePath = Join-Path $resolvedOutDir "OutlookAI-$tag-Setup.exe"
-
-if (-not (Test-Path -LiteralPath $exePath)) {
-    throw "Expected installer EXE was not found: $exePath"
-}
-
-Write-Host ""
-Write-Host "Built: $exePath" -ForegroundColor Green
-Start-Process -FilePath "explorer.exe" -ArgumentList "/select,`"$exePath`""

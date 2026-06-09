@@ -26,7 +26,7 @@ param(
     [string]$SourcePath = "C:\OutlookAI",
     [string]$LiteLlmBaseUrl = "https://litellm.example.com/v1",
     [string]$LiteLlmModel = "gpt-4.1-mini",
-    [string]$LiteLlmVoiceModel = "gpt-4o-mini-transcribe",
+    [AllowEmptyString()][string]$LiteLlmVoiceModel = "",
     [double]$Temperature = 0.2,
     [int]$MaxTokens = 4096,
     [int]$MaxBulkExportRows = 2000
@@ -38,6 +38,23 @@ $ProgramDataPath    = "C:\ProgramData\OutlookAI"
 $BackupRoot         = Join-Path $ProgramDataPath "Backups"
 $ConfigFilePath     = Join-Path $InstallPath "config.xml"
 $Timestamp          = Get-Date -Format "yyyyMMdd-HHmmss"
+
+function Normalize-OptionalValue {
+    param([AllowEmptyString()][string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return ""
+    }
+
+    $trimmed = $Value.Trim()
+    if ($trimmed -in @("null", "none", "no", "off", "-")) {
+        return ""
+    }
+
+    return $trimmed
+}
+
+$LiteLlmVoiceModel = Normalize-OptionalValue $LiteLlmVoiceModel
 
 # Cleans every known OutlookAI registration for one Windows user. Designed
 # to be called once per user hive (offline-loaded for non-logged-in users,

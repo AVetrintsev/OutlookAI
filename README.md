@@ -15,6 +15,8 @@ OutlookAI - VSTO-надстройка для Microsoft Outlook. Она доба�
 - `MaxTokens`
 - `MaxBulkExportRows`
 
+`VoiceModel` необязателен. Если модель транскрибации не используется, оставьте значение пустым или укажите `null`; голосовая транскрибация будет отключена.
+
 Пользователь указывает только:
 
 - `LiteLlmApiKey`
@@ -35,7 +37,7 @@ OutlookAI - VSTO-надстройка для Microsoft Outlook. Она доба�
   -Tag v3.0.0 `
   -LiteLlmBaseUrl "https://litellm.company.example/v1" `
   -LiteLlmModel "company/outlook-chat" `
-  -LiteLlmVoiceModel "company/outlook-transcribe" `
+  -LiteLlmVoiceModel "" `
   -Temperature 0.2 `
   -MaxTokens 4096
 ```
@@ -49,7 +51,7 @@ OutlookAI - VSTO-надстройка для Microsoft Outlook. Она доба�
   -SourcePath "C:\OutlookAI" `
   -LiteLlmBaseUrl "https://litellm.company.example/v1" `
   -LiteLlmModel "company/outlook-chat" `
-  -LiteLlmVoiceModel "company/outlook-transcribe" `
+  -LiteLlmVoiceModel "" `
   -Temperature 0.2 `
   -MaxTokens 4096
 ```

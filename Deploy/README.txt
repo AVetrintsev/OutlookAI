@@ -31,7 +31,7 @@ OutlookAI v3 использует настраиваемый LiteLLM-конне�
     -Tag v3.0.0 `
     -LiteLlmBaseUrl "https://litellm.company.example/v1" `
     -LiteLlmModel "company/outlook-chat" `
-    -LiteLlmVoiceModel "company/outlook-transcribe" `
+    -LiteLlmVoiceModel "" `
     -Temperature 0.2 `
     -MaxTokens 4096
 
@@ -45,6 +45,9 @@ iexpress.exe. Конечному пользователю Visual Studio для �
 Пользователь запускает EXE двойным кликом. Если нужны права администратора,
 установщик запросит их через UAC.
 
+LiteLlmVoiceModel необязателен. Оставьте значение пустым или введите null,
+если в LiteLLM нет модели транскрибации.
+
 Для ручной или тихой установки опубликуйте VSTO-сборку, затем запустите
 PowerShell от имени администратора:
 
@@ -52,7 +55,7 @@ PowerShell от имени администратора:
     -SourcePath "C:\OutlookAI" `
     -LiteLlmBaseUrl "https://litellm.company.example/v1" `
     -LiteLlmModel "company/outlook-chat" `
-    -LiteLlmVoiceModel "company/outlook-transcribe" `
+    -LiteLlmVoiceModel "" `
     -Temperature 0.2 `
     -MaxTokens 4096
 

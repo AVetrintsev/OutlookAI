@@ -29,7 +29,8 @@
     Chat/completions model name to write into the machine config.
 
 .PARAMETER LiteLlmVoiceModel
-    Audio transcription model name to write into the machine config.
+    Optional audio transcription model name to write into the machine config.
+    Use an empty value, "null", "none", "off", or "-" to disable transcription.
 
 .PARAMETER Temperature
     Default chat temperature.
@@ -49,7 +50,7 @@
       -Tag v3.0.0 `
       -LiteLlmBaseUrl "https://litellm.company.example/v1" `
       -LiteLlmModel "company/outlook-chat" `
-      -LiteLlmVoiceModel "company/outlook-transcribe"
+      -LiteLlmVoiceModel ""
 #>
 
 param(
@@ -57,7 +58,7 @@ param(
     [string]$OutDir = "out",
     [string]$LiteLlmBaseUrl = "https://litellm.example.com/v1",
     [string]$LiteLlmModel = "gpt-4.1-mini",
-    [string]$LiteLlmVoiceModel = "gpt-4o-mini-transcribe",
+    [AllowEmptyString()][string]$LiteLlmVoiceModel = "",
     [double]$Temperature = 0.2,
     [int]$MaxTokens = 4096,
     [int]$MaxBulkExportRows = 2000,
@@ -67,7 +68,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 function ConvertTo-PowerShellLiteral {
-    param([Parameter(Mandatory=$true)][string]$Value)
+    param([AllowEmptyString()][string]$Value = "")
     return "'" + $Value.Replace("'", "''") + "'"
 }
 
@@ -78,6 +79,21 @@ function Write-Utf8NoBom {
     )
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
+
+function Normalize-OptionalValue {
+    param([AllowEmptyString()][string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return ""
+    }
+
+    $trimmed = $Value.Trim()
+    if ($trimmed -in @("null", "none", "no", "off", "-")) {
+        return ""
+    }
+
+    return $trimmed
 }
 
 if ($Tag -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z\.\-]+)?$') {
@@ -132,6 +148,7 @@ try {
     $setupPs1 = Join-Path $packageRoot "OutlookAI-Setup.ps1"
     $baseUrlLiteral = ConvertTo-PowerShellLiteral $LiteLlmBaseUrl
     $modelLiteral = ConvertTo-PowerShellLiteral $LiteLlmModel
+    $LiteLlmVoiceModel = Normalize-OptionalValue $LiteLlmVoiceModel
     $voiceModelLiteral = ConvertTo-PowerShellLiteral $LiteLlmVoiceModel
     $setupContent = @"
 `$ErrorActionPreference = "Stop"
@@ -231,11 +248,16 @@ SourceFiles0=$packageRoot
     Write-Utf8NoBom -Path $sedPath -Content $sedContent
 
     & $iexpress /N /Q $sedPath
-    if ($LASTEXITCODE -ne 0) {
-        throw "IExpress failed with exit code $LASTEXITCODE."
+    $iexpressExitCode = $LASTEXITCODE
+    $deadline = (Get-Date).AddSeconds(15)
+    while (-not (Test-Path -LiteralPath $exePath) -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 250
     }
     if (-not (Test-Path -LiteralPath $exePath)) {
-        throw "Installer EXE was not created: $exePath"
+        throw "IExpress failed with exit code $iexpressExitCode and did not create installer EXE: $exePath"
+    }
+    if ($iexpressExitCode -ne 0) {
+        Write-Host "WARN: IExpress returned exit code $iexpressExitCode, but installer EXE was created." -ForegroundColor Yellow
     }
 
     $sha = (Get-FileHash -LiteralPath $exePath -Algorithm SHA256).Hash.ToLowerInvariant()

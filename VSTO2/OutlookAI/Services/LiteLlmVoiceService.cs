@@ -40,6 +40,10 @@ namespace OutlookAI.Services
         public async Task<string> TranscribeAsync(Stream pcm, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (pcm == null) throw new ArgumentNullException(nameof(pcm));
+            if (string.IsNullOrWhiteSpace(Config.VoiceModel))
+            {
+                throw new InvalidOperationException("LiteLLM transcription is disabled because VoiceModel is not configured.");
+            }
 
             byte[] pcmBytes;
             using (var ms = new MemoryStream())
@@ -55,7 +59,7 @@ namespace OutlookAI.Services
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _credentials.GetApiKey());
 
-                form.Add(new StringContent(Config.VoiceModel ?? ""), "model");
+                form.Add(new StringContent(Config.VoiceModel), "model");
                 var file = new ByteArrayContent(wavBytes);
                 file.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
                 form.Add(file, "file", "speech.wav");

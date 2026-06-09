@@ -13,12 +13,14 @@
   -Tag v3.0.0 `
   -LiteLlmBaseUrl "https://litellm.company.example/v1" `
   -LiteLlmModel "company/outlook-chat" `
-  -LiteLlmVoiceModel "company/outlook-transcribe" `
+  -LiteLlmVoiceModel "" `
   -Temperature 0.2 `
   -MaxTokens 4096
 ```
 
 На выходе будет файл `out\OutlookAI-v3.0.0-Setup.exe`. Для сборки нужен MSBuild/Visual Studio с VSTO targets и встроенный Windows `iexpress.exe`; конечному пользователю Visual Studio для запуска готового EXE не нужна. Пользователь запускает его двойным кликом, без ручного запуска PowerShell. Если нужны права администратора, установщик запросит их через UAC.
+
+`LiteLlmVoiceModel` необязателен. Оставьте значение пустым или введите `null`, если в LiteLLM нет модели транскрибации.
 
 Ручной вариант:
 
@@ -27,7 +29,7 @@
   -SourcePath "C:\OutlookAI" `
   -LiteLlmBaseUrl "https://litellm.company.example/v1" `
   -LiteLlmModel "company/outlook-chat" `
-  -LiteLlmVoiceModel "company/outlook-transcribe" `
+  -LiteLlmVoiceModel "" `
   -Temperature 0.2 `
   -MaxTokens 4096
 ```

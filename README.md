@@ -28,7 +28,21 @@ OutlookAI - VSTO-надстройка для Microsoft Outlook. Она доба�
 
 ## Установка
 
-Опубликуйте VSTO-сборку, затем запустите установщик от имени администратора:
+Для локального запуска без командной строки соберите единый EXE-установщик:
+
+```powershell
+.\Deploy\Make-InstallerExe.ps1 `
+  -Tag v3.0.0 `
+  -LiteLlmBaseUrl "https://litellm.company.example/v1" `
+  -LiteLlmModel "company/outlook-chat" `
+  -LiteLlmVoiceModel "company/outlook-transcribe" `
+  -Temperature 0.2 `
+  -MaxTokens 4096
+```
+
+Скрипт создаёт `out\OutlookAI-v3.0.0-Setup.exe`. Для сборки нужен MSBuild/Visual Studio с VSTO targets и встроенный Windows `iexpress.exe`; конечному пользователю Visual Studio для запуска готового EXE не нужна. Пользователь запускает этот файл двойным кликом; установщик сам запросит права администратора через UAC.
+
+Для ручной или тихой установки можно опубликовать VSTO-сборку и запустить скрипт от имени администратора:
 
 ```powershell
 .\Deploy\Install-OutlookAI.ps1 `

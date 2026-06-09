@@ -25,7 +25,28 @@ OutlookAI v3 использует настраиваемый LiteLLM-конне�
 
 УСТАНОВКА
 ---------
-Опубликуйте VSTO-сборку, затем запустите PowerShell от имени администратора:
+Для пользователей можно собрать единый EXE-установщик:
+
+  .\Deploy\Make-InstallerExe.ps1 `
+    -Tag v3.0.0 `
+    -LiteLlmBaseUrl "https://litellm.company.example/v1" `
+    -LiteLlmModel "company/outlook-chat" `
+    -LiteLlmVoiceModel "company/outlook-transcribe" `
+    -Temperature 0.2 `
+    -MaxTokens 4096
+
+Скрипт создаёт:
+  out\OutlookAI-v3.0.0-Setup.exe
+
+Для сборки нужен MSBuild/Visual Studio с VSTO targets и встроенный Windows
+iexpress.exe. Конечному пользователю Visual Studio для запуска готового EXE
+не нужна.
+
+Пользователь запускает EXE двойным кликом. Если нужны права администратора,
+установщик запросит их через UAC.
+
+Для ручной или тихой установки опубликуйте VSTO-сборку, затем запустите
+PowerShell от имени администратора:
 
   .\Deploy\Install-OutlookAI.ps1 `
     -SourcePath "C:\OutlookAI" `

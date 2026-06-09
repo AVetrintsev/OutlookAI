@@ -11,9 +11,9 @@ namespace OutlookAI
 {
     public partial class ThisAddIn
     {
-        public CodexAuthService AuthService { get; private set; }
-        public CodexChatService ChatService { get; private set; }
-        public RealtimeVoiceService VoiceService { get; private set; }
+        public LiteLlmCredentialService CredentialService { get; private set; }
+        public LiteLlmChatService ChatService { get; private set; }
+        public LiteLlmVoiceService VoiceService { get; private set; }
         public OutlookThreadMarshaller OutlookMarshaller { get; private set; }
         public IdResolver IdResolver { get; private set; }
         public OutlookAI.Services.Tools.IOutlookAdvancedSearchRunner AdvancedSearchRunner { get; private set; }
@@ -50,9 +50,9 @@ namespace OutlookAI
 
             try
             {
-                AuthService = new CodexAuthService(Config.CodexAuthPath);
-                ChatService = new CodexChatService(AuthService);
-                VoiceService = new RealtimeVoiceService(AuthService);
+                CredentialService = new LiteLlmCredentialService();
+                ChatService = new LiteLlmChatService(CredentialService);
+                VoiceService = new LiteLlmVoiceService(CredentialService);
 
                 // SynchronizationContext captured on the Outlook UI thread.
                 // Forms apps install a WindowsFormsSynchronizationContext per
@@ -117,7 +117,7 @@ namespace OutlookAI
 
                 VoiceService?.Dispose();
                 ChatService?.Dispose();
-                AuthService?.Dispose();
+                CredentialService?.Dispose();
             }
             catch (Exception ex)
             {

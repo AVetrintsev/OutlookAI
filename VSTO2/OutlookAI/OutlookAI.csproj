@@ -322,8 +322,8 @@
     <Compile Include="Services\Chat\ConversationStore.cs" />
     <Compile Include="Services\Chat\StopReason.cs" />
     <Compile Include="Services\Chat\TurnResult.cs" />
-    <Compile Include="Services\CodexAuthService.cs" />
-    <Compile Include="Services\CodexChatService.cs" />
+    <Compile Include="Services\LiteLlmCredentialService.cs" />
+    <Compile Include="Services\LiteLlmChatService.cs" />
     <Compile Include="Services\Export\ExcelCellCoercer.cs" />
     <Compile Include="Services\Export\ExcelColumnSpec.cs" />
     <Compile Include="Services\Export\ExcelColumnType.cs" />
@@ -341,7 +341,7 @@
     <Compile Include="Services\IToolHost.cs" />
     <Compile Include="Services\OutlookThreadMarshaller.cs" />
     <Compile Include="Services\OutlookToolHost.cs" />
-    <Compile Include="Services\RealtimeVoiceService.cs" />
+    <Compile Include="Services\LiteLlmVoiceService.cs" />
     <Compile Include="Services\ToolDispatcher.cs" />
     <Compile Include="Services\Tools\AggregateMessagesArgs.cs" />
     <Compile Include="Services\Tools\AggregateMessagesArgsParser.cs" />

@@ -1,35 +1,29 @@
-# Installing OutlookAI
+# Install
 
-OutlookAI supports three install shapes. All three share the same installer
-(`Deploy/Install-OutlookAI.ps1`) and the same OAuth flow (sign in once with
-your ChatGPT account, then OutlookAI uses your existing subscription for
-inference).
+Use `Deploy/Install-OutlookAI.ps1` for workstation, RDS, and silent image installs.
 
-| Shape | Use case | Detail |
-|---|---|---|
-| **Single workstation** | One developer or power user. | [Deploy/README.txt — Shape A](../Deploy/README.txt) |
-| **Multi-user RDS / Terminal Server** | Shared server, many interactive users, one shared ChatGPT credential. | [Deploy/README.txt — Shape B](../Deploy/README.txt) |
-| **IT-managed image / silent install** | MDT / SCCM / corporate gold image. | [Deploy/README.txt — Shape C](../Deploy/README.txt) |
+The installer writes the server-side LiteLLM defaults to:
 
-## Quick start (single workstation)
+`C:\Program Files\OutlookAI\config.xml`
+
+Example:
 
 ```powershell
-git clone https://github.com/kirklandsig/OutlookAI.git
-cd OutlookAI
-
-# Publish Release into a staging folder
-& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" `
-  "VSTO2\OutlookAI.sln" /target:Publish /p:Configuration=Release /p:Platform="Any CPU" `
-  /p:PublishDir="C:\OutlookAI\"
-
-# Install elevated
-Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned
-.\Deploy\Install-OutlookAI.ps1 -SourcePath "C:\OutlookAI"
-
-# Open Outlook → AI Assistant → sign in with your ChatGPT account.
+.\Deploy\Install-OutlookAI.ps1 `
+  -SourcePath "C:\OutlookAI" `
+  -LiteLlmBaseUrl "https://litellm.company.example/v1" `
+  -LiteLlmModel "company/outlook-chat" `
+  -LiteLlmVoiceModel "company/outlook-transcribe" `
+  -Temperature 0.2 `
+  -MaxTokens 4096
 ```
 
-For the full deployment story (cleanup, shared credentials, rotation,
-troubleshooting, rollback, uninstall), see
-[`Deploy/README.txt`](../Deploy/README.txt). That file is the canonical
-install guide; this page is a pointer.
+The installer does **not** write API keys. Each user opens OutlookAI Settings and enters their own LiteLLM API key, which is stored in that user's `%APPDATA%\OutlookAI\config.xml`.
+
+Basic verification:
+
+1. Outlook shows the `AI Assistant` ribbon group.
+2. Open Settings and enter the admin password.
+3. Confirm the LiteLLM endpoint/model values are shown.
+4. Enter the user's LiteLLM API key.
+5. Run a quick action or send a chat message.

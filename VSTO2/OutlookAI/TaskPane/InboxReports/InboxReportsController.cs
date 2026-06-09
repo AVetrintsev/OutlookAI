@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,7 +26,7 @@ namespace OutlookAI.TaskPane.InboxReports
     public sealed class InboxReportsController : IDisposable
     {
         private readonly Control _hostContainer;
-        private readonly CodexChatService _chat;
+        private readonly LiteLlmChatService _chat;
         private readonly IToolHost _toolHost;
         private readonly LiveOutlookSurface _surface;
         private readonly ConversationStore _store;
@@ -43,7 +43,7 @@ namespace OutlookAI.TaskPane.InboxReports
 
         public InboxReportsController(
             Control hostContainer,
-            CodexChatService chat,
+            LiteLlmChatService chat,
             IToolHost toolHost,
             LiveOutlookSurface surface,
             ConversationStore store)

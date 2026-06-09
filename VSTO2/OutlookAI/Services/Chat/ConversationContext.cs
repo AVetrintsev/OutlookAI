@@ -1,10 +1,10 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 
 namespace OutlookAI.Services.Chat
 {
     /// <summary>
-    /// Per-turn context for <c>CodexChatService.RunTurnAsync</c>. Carries the
+    /// Per-turn context for <c>LiteLlmChatService.RunTurnAsync</c>. Carries the
     /// accumulated conversation history, the system instructions to seed the
     /// turn, the (nullable) reasoning-effort override, and which tools the
     /// chat service should expose for this turn.

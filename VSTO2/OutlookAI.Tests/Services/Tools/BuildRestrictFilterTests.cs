@@ -6,7 +6,7 @@ namespace OutlookAI.Tests.Services.Tools
 {
     /// <summary>
     /// Locks the DASL @SQL= filter syntax built from a SearchMessagesArgs.
-    /// The Codex backend never sees this filter - it's the bridge between
+    /// The model backend never sees this filter - it's the bridge between
     /// the model's structured request and Outlook's MAPI restrict API. If
     /// these clauses regress, search returns wrong results silently.
     /// </summary>

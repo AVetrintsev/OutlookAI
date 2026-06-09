@@ -1,21 +1,19 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Uninstalls OutlookAI v2 from this server.
+    Uninstalls OutlookAI v3 from this server.
 
 .DESCRIPTION
     Removes:
       - HKLM Outlook add-in registration (64-bit + WOW6432Node)
       - C:\Program Files\OutlookAI install directory
-      - C:\ProgramData\OutlookAI\auth.json + sidecar refresh lock
-        (clears the shared ChatGPT OAuth credentials)
+      - C:\ProgramData\OutlookAI runtime directory except Backups
 
     Preserves:
       - C:\ProgramData\OutlookAI\Backups (v1 config rollback artifacts)
 
-    Phase 1 does NOT perform server-side OAuth token revocation. To
-    fully revoke credentials with OpenAI, sign the account out from
-    https://chatgpt.com/#settings or rotate by signing in fresh.
+    Per-user LiteLLM API keys live under each user's AppData config. This
+    script does not enumerate and delete user profiles.
 
     Run as Administrator.
 
@@ -30,7 +28,7 @@ $InstallPath     = "C:\Program Files\OutlookAI"
 $ProgramDataPath = "C:\ProgramData\OutlookAI"
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  OutlookAI v2 Uninstaller" -ForegroundColor Cyan
+Write-Host "  OutlookAI v3 Uninstaller" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -65,15 +63,12 @@ if (Test-Path $InstallPath) {
 }
 Write-Host "  Done." -ForegroundColor Green
 
-# --- 3. Local OAuth credentials (preserve Backups) -----------------------
-Write-Host "[3/3] Removing local OAuth credentials (preserving Backups)..." -ForegroundColor Yellow
-$authFile  = Join-Path $ProgramDataPath "auth.json"
-$lockFile  = Join-Path $ProgramDataPath "auth.json.refresh.lock"
-$tempFile  = Join-Path $ProgramDataPath "auth.json.tmp"
-foreach ($path in @($authFile, $lockFile, $tempFile)) {
-    if (Test-Path $path) {
-        Remove-Item -Path $path -Force
-        Write-Host "  Removed: $path" -ForegroundColor Gray
+# --- 3. ProgramData runtime files (preserve Backups) ---------------------
+Write-Host "[3/3] Removing ProgramData runtime files (preserving Backups)..." -ForegroundColor Yellow
+if (Test-Path $ProgramDataPath) {
+    Get-ChildItem -Path $ProgramDataPath -Force | Where-Object { $_.Name -ne "Backups" } | ForEach-Object {
+        Remove-Item -LiteralPath $_.FullName -Recurse -Force
+        Write-Host "  Removed: $($_.FullName)" -ForegroundColor Gray
     }
 }
 Write-Host "  Preserved backups under $ProgramDataPath\Backups" -ForegroundColor Gray
@@ -86,8 +81,6 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Users will need to restart Outlook for changes to take effect." -ForegroundColor White
 Write-Host ""
-Write-Host "NOTE: Phase 1 does not revoke OAuth tokens server-side." -ForegroundColor Yellow
-Write-Host "      To fully revoke, sign the ChatGPT account out at" -ForegroundColor Yellow
-Write-Host "      https://chatgpt.com/#settings or rotate the credential" -ForegroundColor Yellow
-Write-Host "      by signing in again on a fresh install." -ForegroundColor Yellow
+Write-Host "NOTE: Per-user LiteLLM API keys are stored in each user's AppData config." -ForegroundColor Yellow
+Write-Host "      Delete %APPDATA%\\OutlookAI\\config.xml for a user to remove it." -ForegroundColor Yellow
 Write-Host ""

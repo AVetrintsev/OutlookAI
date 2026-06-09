@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -23,7 +23,7 @@ namespace OutlookAI.TaskPane.Variants
     public sealed class VariantsController : IDisposable
     {
         private readonly Control _host;
-        private readonly CodexChatService _chat;
+        private readonly LiteLlmChatService _chat;
         private readonly IToolHost _toolHost;
         private readonly LiveOutlookSurface _surface;
         private readonly Func<string, bool> _insertCallback;   // body -> success
@@ -47,7 +47,7 @@ namespace OutlookAI.TaskPane.Variants
 
         public VariantsController(
             Control host,
-            CodexChatService chat,
+            LiteLlmChatService chat,
             IToolHost toolHost,
             LiveOutlookSurface surface,
             Func<string, bool> insertCallback,

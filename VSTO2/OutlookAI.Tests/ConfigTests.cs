@@ -53,6 +53,37 @@ namespace OutlookAI.Tests
         }
 
         [Fact]
+        public void LoadConfigFromPaths_AppliesServerDefaultsFromAnyMachineConfigPath()
+        {
+            var dir = Path.Combine(Path.GetTempPath(),
+                "outlookai-config-tests", Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            var missing32BitPath = Path.Combine(dir, "missing-x86.xml");
+            var installedPath = Path.Combine(dir, "program-files.xml");
+            var userPath = Path.Combine(dir, "user.xml");
+
+            File.WriteAllText(installedPath, "<Config>"
+                + "<LiteLlmBaseUrl>http://localhost:11434</LiteLlmBaseUrl>"
+                + "<Model>ollama/qwen2.5:3b</Model>"
+                + "</Config>");
+
+            Config.LoadConfigFromPaths(new[] { missing32BitPath, installedPath }, null, userPath);
+
+            Assert.Equal("http://localhost:11434/v1", Config.LiteLlmBaseUrl);
+            Assert.Equal("ollama/qwen2.5:3b", Config.Model);
+        }
+
+        [Theory]
+        [InlineData("http://localhost:11434", "http://localhost:11434/v1")]
+        [InlineData("http://localhost:11434/", "http://localhost:11434/v1")]
+        [InlineData("https://llm.example.test/v1/", "https://llm.example.test/v1")]
+        [InlineData("https://llm.example.test/v1/chat/completions", "https://llm.example.test/v1")]
+        public void NormalizeBaseUrl_AcceptsHostOrOpenAiEndpoint(string raw, string expected)
+        {
+            Assert.Equal(expected, Config.NormalizeBaseUrl(raw));
+        }
+
+        [Fact]
         public void LoadConfigFromPaths_EmptyVoiceModelDisablesTranscription()
         {
             var (g, u) = MakeTempPaths();

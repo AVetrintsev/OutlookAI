@@ -308,7 +308,8 @@ namespace OutlookAI.TaskPane.InboxCopilot
             }
             catch (Exception ex)
             {
-                await RunScript("outlookai.showError(" + JsString(ex.Message ?? "") + ");");
+                TraceLog.Write("StartTurnAsync EXCEPTION: " + ex, "InboxCopilot");
+                await RunScript("outlookai.showError(" + JsString(FormatTurnError(ex)) + ");");
             }
             finally
             {
@@ -344,6 +345,20 @@ namespace OutlookAI.TaskPane.InboxCopilot
                 TraceLog.Write("BuildSystemInstructions error: " + ex, "InboxCopilot");
                 return "You are the Outlook Inbox Copilot. Help the user with their mailbox.";
             }
+        }
+
+        private static string FormatTurnError(Exception ex)
+        {
+            var detail = ex?.Message ?? "";
+            if (ex?.InnerException != null && !string.IsNullOrWhiteSpace(ex.InnerException.Message))
+            {
+                detail += " " + ex.InnerException.Message;
+            }
+            if (string.IsNullOrWhiteSpace(detail))
+            {
+                detail = "неизвестная ошибка";
+            }
+            return "Ошибка при обращении к LiteLLM: " + detail;
         }
 
         private async Task RunScript(string script)

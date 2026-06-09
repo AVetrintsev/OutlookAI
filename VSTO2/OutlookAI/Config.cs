@@ -69,11 +69,7 @@ namespace OutlookAI
             return AvailableReasoningEfforts;
         }
 
-        private static readonly string GlobalConfigFilePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            "OutlookAI",
-            "config.xml"
-        );
+        private static readonly string[] GlobalConfigFilePaths = BuildGlobalConfigFilePaths();
 
         private static readonly string UserConfigFilePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -94,13 +90,21 @@ namespace OutlookAI
 
         public static void LoadConfig()
         {
-            LoadConfigFromPaths(GlobalConfigFilePath, SharedConfigFilePath, UserConfigFilePath);
+            LoadConfigFromPaths(GlobalConfigFilePaths, SharedConfigFilePath, UserConfigFilePath);
         }
 
         public static void LoadConfigFromPaths(string globalConfigPath, string sharedConfigPath, string userConfigPath)
         {
+            LoadConfigFromPaths(new[] { globalConfigPath }, sharedConfigPath, userConfigPath);
+        }
+
+        public static void LoadConfigFromPaths(IEnumerable<string> globalConfigPaths, string sharedConfigPath, string userConfigPath)
+        {
             ResetDefaults();
-            LoadFromFile(globalConfigPath, allowServerFields: true, allowApiKey: false);
+            foreach (var globalConfigPath in globalConfigPaths ?? Enumerable.Empty<string>())
+            {
+                LoadFromFile(globalConfigPath, allowServerFields: true, allowApiKey: false);
+            }
             LoadFromFile(sharedConfigPath, allowServerFields: false, allowApiKey: false);
             LoadFromFile(userConfigPath, allowServerFields: false, allowApiKey: true);
         }
@@ -108,6 +112,75 @@ namespace OutlookAI
         public static void LoadConfigFromPaths(string globalConfigPath, string userConfigPath)
         {
             LoadConfigFromPaths(globalConfigPath, sharedConfigPath: null, userConfigPath);
+        }
+
+        private static string[] BuildGlobalConfigFilePaths()
+        {
+            var paths = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            void AddConfigPath(string root)
+            {
+                if (string.IsNullOrWhiteSpace(root))
+                {
+                    return;
+                }
+
+                try
+                {
+                    var path = Path.Combine(root, "OutlookAI", "config.xml");
+                    if (seen.Add(path))
+                    {
+                        paths.Add(path);
+                    }
+                }
+                catch
+                {
+                    // Ignore malformed environment paths.
+                }
+            }
+
+            void AddExactPath(string path)
+            {
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    return;
+                }
+
+                try
+                {
+                    if (seen.Add(path))
+                    {
+                        paths.Add(path);
+                    }
+                }
+                catch
+                {
+                    // Ignore malformed paths.
+                }
+            }
+
+            AddConfigPath(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86));
+            AddConfigPath(Environment.GetEnvironmentVariable("ProgramFiles(x86)"));
+            AddConfigPath(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
+            AddConfigPath(Environment.GetEnvironmentVariable("ProgramW6432"));
+            AddConfigPath(Environment.GetEnvironmentVariable("ProgramFiles"));
+
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            AddExactPath(Path.Combine(baseDir, "config.xml"));
+            try
+            {
+                var parent = Directory.GetParent(baseDir);
+                AddExactPath(parent == null ? null : Path.Combine(parent.FullName, "config.xml"));
+                var grandparent = parent == null ? null : parent.Parent;
+                AddExactPath(grandparent == null ? null : Path.Combine(grandparent.FullName, "config.xml"));
+            }
+            catch
+            {
+                // BaseDirectory may be unavailable in unusual hosts.
+            }
+
+            return paths.ToArray();
         }
 
         public static void ResetDefaults()
@@ -278,7 +351,31 @@ namespace OutlookAI
             {
                 value = value.Substring(0, value.Length - 1);
             }
-            return string.IsNullOrEmpty(value) ? DefaultLiteLlmBaseUrl : value;
+            if (string.IsNullOrEmpty(value))
+            {
+                return DefaultLiteLlmBaseUrl;
+            }
+
+            if (value.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            {
+                value = value.Substring(0, value.Length - "/chat/completions".Length);
+            }
+            else if (value.EndsWith("/audio/transcriptions", StringComparison.OrdinalIgnoreCase))
+            {
+                value = value.Substring(0, value.Length - "/audio/transcriptions".Length);
+            }
+
+            while (value.EndsWith("/", StringComparison.Ordinal))
+            {
+                value = value.Substring(0, value.Length - 1);
+            }
+
+            if (!value.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+            {
+                value += "/v1";
+            }
+
+            return value;
         }
 
         private static void TrySaveTo(string filePath, XDocument doc)

@@ -293,7 +293,8 @@ namespace OutlookAI.TaskPane.Chat
             }
             catch (Exception ex)
             {
-                await RunScript("outlookai.showError(" + JsString(ex.Message ?? "") + ");");
+                TraceLog.Write("StartTurnAsync EXCEPTION: " + ex, "ChatController");
+                await RunScript("outlookai.showError(" + JsString(FormatTurnError(ex)) + ");");
             }
             finally
             {
@@ -348,6 +349,20 @@ namespace OutlookAI.TaskPane.Chat
                 System.Diagnostics.Debug.WriteLine("BuildSystemInstructions compose-state error: " + ex);
             }
             return prompt;
+        }
+
+        private static string FormatTurnError(Exception ex)
+        {
+            var detail = ex?.Message ?? "";
+            if (ex?.InnerException != null && !string.IsNullOrWhiteSpace(ex.InnerException.Message))
+            {
+                detail += " " + ex.InnerException.Message;
+            }
+            if (string.IsNullOrWhiteSpace(detail))
+            {
+                detail = "неизвестная ошибка";
+            }
+            return "Ошибка при обращении к LiteLLM: " + detail;
         }
 
         private async Task RunScript(string script)

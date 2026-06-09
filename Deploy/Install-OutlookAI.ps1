@@ -37,6 +37,8 @@ $InstallPath        = "C:\Program Files\OutlookAI"
 $ProgramDataPath    = "C:\ProgramData\OutlookAI"
 $BackupRoot         = Join-Path $ProgramDataPath "Backups"
 $ConfigFilePath     = Join-Path $InstallPath "config.xml"
+$ProgramFilesX86    = ${env:ProgramFiles(x86)}
+$ConfigMirrorFilePath = if ([string]::IsNullOrWhiteSpace($ProgramFilesX86)) { "" } else { Join-Path $ProgramFilesX86 "OutlookAI\config.xml" }
 $Timestamp          = Get-Date -Format "yyyyMMdd-HHmmss"
 
 function Normalize-OptionalValue {
@@ -406,6 +408,20 @@ $v3Config = @"
 
 Set-Content -Path $ConfigFilePath -Value $v3Config -Encoding UTF8
 Write-Host "  Wrote $ConfigFilePath" -ForegroundColor Gray
+
+# 32-bit Outlook runs the add-in in a 32-bit .NET process where
+# Environment.SpecialFolder.ProgramFiles resolves to Program Files (x86).
+# Keep a tiny config mirror there so that bitness cannot make the add-in
+# fall back to compiled LiteLLM defaults.
+if (-not [string]::IsNullOrWhiteSpace($ConfigMirrorFilePath) -and
+    -not [string]::Equals($ConfigMirrorFilePath, $ConfigFilePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+    $mirrorDir = Split-Path -Parent $ConfigMirrorFilePath
+    if (!(Test-Path $mirrorDir)) {
+        New-Item -ItemType Directory -Path $mirrorDir -Force | Out-Null
+    }
+    Set-Content -Path $ConfigMirrorFilePath -Value $v3Config -Encoding UTF8
+    Write-Host "  Wrote $ConfigMirrorFilePath" -ForegroundColor Gray
+}
 # v2.1+ release packages ship a version.json alongside Install-OutlookAI.ps1.
 # Copy it into the install dir so the in-app updater knows what is installed.
 $stagedVersionJson = Join-Path $SourcePath "version.json"

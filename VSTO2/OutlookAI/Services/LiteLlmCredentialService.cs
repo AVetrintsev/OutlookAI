@@ -21,11 +21,11 @@ namespace OutlookAI.Services
             Message = message ?? "";
         }
 
-        public static CredentialStatus Missing(string message = "LiteLLM API key is not configured")
+        public static CredentialStatus Missing(string message = "Ключ API LiteLLM не настроен")
             => new CredentialStatus(CredentialState.Missing, message);
 
         public static CredentialStatus Configured()
-            => new CredentialStatus(CredentialState.Configured, "LiteLLM API key configured");
+            => new CredentialStatus(CredentialState.Configured, "Ключ API LiteLLM настроен");
 
         public static CredentialStatus Error(string message)
             => new CredentialStatus(CredentialState.Error, message);
@@ -52,7 +52,7 @@ namespace OutlookAI.Services
             var apiKey = Config.LiteLlmApiKey ?? "";
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                throw new InvalidOperationException("LiteLLM API key is not configured. Open Settings and enter your API key.");
+                throw new InvalidOperationException("Ключ API LiteLLM не настроен. Откройте настройки и введите ключ API.");
             }
             return apiKey.Trim();
         }

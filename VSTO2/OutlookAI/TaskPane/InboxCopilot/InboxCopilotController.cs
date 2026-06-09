@@ -65,7 +65,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             TraceLog.Write(">> InitializeAsync (sync prefix)", "InboxCopilot");
             if (!WebView2Bootstrap.IsRuntimeInstalled())
             {
-                ShowFallback("WebView2 runtime not installed.\r\nRun the installer or download:\r\n" +
+                ShowFallback("Среда WebView2 Runtime не установлена.\r\nЗапустите установщик или скачайте её:\r\n" +
                              "https://developer.microsoft.com/microsoft-edge/webview2/");
                 return;
             }
@@ -87,7 +87,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             catch (Exception ex)
             {
                 TraceLog.Write("InitializeAsync EXCEPTION: " + ex, "InboxCopilot");
-                ShowFallback("WebView2 failed to initialize: " + ex.Message);
+                ShowFallback("Не удалось инициализировать WebView2: " + ex.Message);
             }
         }
 

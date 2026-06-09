@@ -30,7 +30,7 @@ namespace OutlookAI
         {
             _credentials = credentials;
 
-            Text = "OutlookAI Settings";
+            Text = "Настройки OutlookAI";
             Size = new Size(460, 560);
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -52,7 +52,7 @@ namespace OutlookAI
         {
             var lblPassword = new Label
             {
-                Text = "Admin Password:",
+                Text = "Пароль администратора:",
                 Location = new Point(20, 20),
                 AutoSize = true
             };
@@ -66,7 +66,7 @@ namespace OutlookAI
 
             var btnLogin = new Button
             {
-                Text = "Login",
+                Text = "Войти",
                 Location = new Point(320, 75),
                 Width = 80
             };
@@ -104,7 +104,7 @@ namespace OutlookAI
         {
             var grp = new GroupBox
             {
-                Text = "LiteLLM Connector",
+                Text = "Коннектор LiteLLM",
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 Location = new Point(20, 10),
                 Size = new Size(400, 170)
@@ -112,7 +112,7 @@ namespace OutlookAI
 
             var lblEndpoint = new Label
             {
-                Text = "Endpoint: " + Config.NormalizeBaseUrl(Config.LiteLlmBaseUrl),
+                Text = "Адрес: " + Config.NormalizeBaseUrl(Config.LiteLlmBaseUrl),
                 Location = new Point(15, 25),
                 Size = new Size(370, 20),
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Regular)
@@ -120,7 +120,7 @@ namespace OutlookAI
 
             var lblModel = new Label
             {
-                Text = "Model: " + Config.Model,
+                Text = "Модель: " + Config.Model,
                 Location = new Point(15, 47),
                 Size = new Size(370, 20),
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Regular)
@@ -128,7 +128,7 @@ namespace OutlookAI
 
             var lblVoiceModel = new Label
             {
-                Text = "Voice model: " + (string.IsNullOrWhiteSpace(Config.VoiceModel) ? "(disabled)" : Config.VoiceModel),
+                Text = "Модель транскрибации: " + (string.IsNullOrWhiteSpace(Config.VoiceModel) ? "(отключена)" : Config.VoiceModel),
                 Location = new Point(15, 69),
                 Size = new Size(370, 20),
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Regular)
@@ -136,7 +136,7 @@ namespace OutlookAI
 
             var lblApiKey = new Label
             {
-                Text = "API key:",
+                Text = "Ключ API:",
                 Location = new Point(15, 96),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular)
@@ -152,7 +152,7 @@ namespace OutlookAI
 
             var btnSave = new Button
             {
-                Text = "Save",
+                Text = "Сохранить",
                 Location = new Point(295, 91),
                 Width = 80
             };
@@ -160,7 +160,7 @@ namespace OutlookAI
 
             var btnClear = new Button
             {
-                Text = "Clear Key",
+                Text = "Удалить ключ",
                 Location = new Point(295, 123),
                 Width = 80
             };
@@ -185,7 +185,7 @@ namespace OutlookAI
         {
             var lblNewPassword = new Label
             {
-                Text = "New Admin Password (leave blank to keep):",
+                Text = "Новый пароль администратора (оставьте пустым, чтобы не менять):",
                 Location = new Point(20, 195),
                 AutoSize = true
             };
@@ -199,7 +199,7 @@ namespace OutlookAI
 
             var btnSavePassword = new Button
             {
-                Text = "Save Password",
+                Text = "Сохранить пароль",
                 Location = new Point(280, 213),
                 Width = 120
             };
@@ -215,7 +215,7 @@ namespace OutlookAI
         {
             var grpAi = new GroupBox
             {
-                Text = "AI Behavior",
+                Text = "Поведение AI",
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 Location = new Point(20, 255),
                 Size = new Size(400, 155)
@@ -223,7 +223,7 @@ namespace OutlookAI
 
             var lblReasoning = new Label
             {
-                Text = "Reasoning effort:",
+                Text = "Уровень рассуждений:",
                 Location = new Point(15, 28),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular)
@@ -242,7 +242,7 @@ namespace OutlookAI
 
             var lblWriteTools = new Label
             {
-                Text = "Allowed write tools:",
+                Text = "Разрешённые действия:",
                 Location = new Point(15, 60),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular)
@@ -265,7 +265,7 @@ namespace OutlookAI
 
             var btnSaveAi = new Button
             {
-                Text = "Save AI Settings",
+                Text = "Сохранить настройки AI",
                 Location = new Point(255, 123),
                 Width = 120
             };
@@ -278,7 +278,7 @@ namespace OutlookAI
                 ForeColor = Color.DarkGreen,
                 Font = new Font("Segoe UI", 8F, FontStyle.Italic),
                 Visible = false,
-                Text = "Saved."
+                Text = "Сохранено."
             };
 
             grpAi.Controls.AddRange(new Control[]
@@ -301,7 +301,7 @@ namespace OutlookAI
             }
             else
             {
-                _lblError.Text = "Invalid password";
+                _lblError.Text = "Неверный пароль";
                 _lblError.Visible = true;
             }
         }
@@ -338,8 +338,8 @@ namespace OutlookAI
             _txtNewPassword.Text = "";
             MessageBox.Show(
                 this,
-                "Admin password updated.",
-                "OutlookAI Settings",
+                "Пароль администратора обновлён.",
+                "Настройки OutlookAI",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
@@ -379,7 +379,7 @@ namespace OutlookAI
         {
             return _credentials != null
                 ? _credentials.GetStatus()
-                : CredentialStatus.Error("Credential service unavailable");
+                : CredentialStatus.Error("Сервис учётных данных недоступен");
         }
 
         private void OnCredentialStatusChanged(object sender, CredentialStatus status)
@@ -398,11 +398,11 @@ namespace OutlookAI
             {
                 case CredentialState.Configured:
                     _lblCredentialStatus.ForeColor = Color.DarkGreen;
-                    _lblCredentialStatus.Text = "API key configured.";
+                    _lblCredentialStatus.Text = "Ключ API настроен.";
                     break;
                 case CredentialState.Error:
                     _lblCredentialStatus.ForeColor = Color.DarkRed;
-                    _lblCredentialStatus.Text = "Credential error: " + status.Message;
+                    _lblCredentialStatus.Text = "Ошибка учётных данных: " + status.Message;
                     break;
                 default:
                     _lblCredentialStatus.ForeColor = Color.DarkSlateGray;

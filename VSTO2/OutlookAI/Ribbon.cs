@@ -2,6 +2,7 @@
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 using Office = Microsoft.Office.Core;
 
 namespace OutlookAI
@@ -44,6 +45,14 @@ namespace OutlookAI
         public void OnReportsClick(Office.IRibbonControl control)
         {
             Globals.ThisAddIn.ShowReportsTaskPane();
+        }
+
+        public void OnSettingsClick(Office.IRibbonControl control)
+        {
+            using (var settingsForm = new SettingsForm())
+            {
+                settingsForm.ShowDialog();
+            }
         }
 
         private static string GetResourceText(string resourceName)

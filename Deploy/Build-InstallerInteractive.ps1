@@ -140,6 +140,7 @@ try {
         Temperature = $temperature
         MaxTokens = $maxTokens
         MaxBulkExportRows = $maxBulkExportRows
+        ExeOnly = $true
     }
 
     if (-not [string]::IsNullOrWhiteSpace($certThumbprint)) {

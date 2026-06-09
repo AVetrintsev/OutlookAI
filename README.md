@@ -1,12 +1,12 @@
 # OutlookAI
 
-OutlookAI is a VSTO add-in for Microsoft Outlook that adds AI-assisted email drafting, editing, mailbox copilot chat, reports, and exports.
+OutlookAI - VSTO-надстройка для Microsoft Outlook. Она добавляет AI-помощника для написания и редактирования писем, чат по почтовому ящику, отчёты и экспорт данных.
 
-This branch uses a configurable **LiteLLM** connector. The add-in talks to an OpenAI-compatible LiteLLM proxy and users enter their own API key in OutlookAI Settings.
+Текущая ветка использует настраиваемый **LiteLLM**-коннектор. Надстройка обращается к LiteLLM-прокси с OpenAI-compatible API, а каждый пользователь указывает собственный ключ API в настройках OutlookAI.
 
-## LiteLLM Configuration
+## Конфигурация LiteLLM
 
-Install-time scripts provide the shared defaults:
+Базовые параметры задаются при установке расширения скриптом:
 
 - `LiteLlmBaseUrl`
 - `Model`
@@ -15,20 +15,20 @@ Install-time scripts provide the shared defaults:
 - `MaxTokens`
 - `MaxBulkExportRows`
 
-Users provide only:
+Пользователь указывает только:
 
 - `LiteLlmApiKey`
 
-The API key is stored per user in `%APPDATA%\OutlookAI\config.xml`. It is not written to the machine-wide install config.
+Ключ API хранится отдельно для каждого пользователя в `%APPDATA%\OutlookAI\config.xml`. Он не записывается в общую машинную конфигурацию установки.
 
-The runtime endpoints are:
+Используемые конечные точки:
 
 - `<LiteLlmBaseUrl>/chat/completions`
 - `<LiteLlmBaseUrl>/audio/transcriptions`
 
-## Install
+## Установка
 
-Publish the VSTO build, then run the installer as Administrator:
+Опубликуйте VSTO-сборку, затем запустите установщик от имени администратора:
 
 ```powershell
 .\Deploy\Install-OutlookAI.ps1 `
@@ -40,21 +40,23 @@ Publish the VSTO build, then run the installer as Administrator:
   -MaxTokens 4096
 ```
 
-After install, each user opens OutlookAI Settings, enters the admin password, and saves their LiteLLM API key.
+После установки каждый пользователь открывает настройки OutlookAI и сохраняет свой ключ API LiteLLM. Пароль администратора для ввода пользовательского ключа API не нужен.
 
-## Project Layout
+Пароль администратора должен использоваться только для административных настроек: смены пароля администратора, разрешённых write-tools и других параметров, которые не являются личным ключом API пользователя.
 
-- `VSTO2/OutlookAI/Services/LiteLlmChatService.cs` - LiteLLM chat completions connector, streaming, and tool-call loop.
-- `VSTO2/OutlookAI/Services/LiteLlmCredentialService.cs` - per-user API key state.
-- `VSTO2/OutlookAI/Services/LiteLlmVoiceService.cs` - LiteLLM audio transcription connector.
-- `VSTO2/OutlookAI/Services/Tools/` - Outlook tool surface used by chat and reports.
-- `Deploy/` - installer, uninstaller, and deployment docs.
+## Структура проекта
 
-## Development
+- `VSTO2/OutlookAI/Services/LiteLlmChatService.cs` - коннектор LiteLLM chat completions, потоковая выдача и цикл tool-calling.
+- `VSTO2/OutlookAI/Services/LiteLlmCredentialService.cs` - состояние пользовательского ключа API.
+- `VSTO2/OutlookAI/Services/LiteLlmVoiceService.cs` - коннектор LiteLLM audio transcription.
+- `VSTO2/OutlookAI/Services/Tools/` - слой Outlook-инструментов, который используется чатом и отчётами.
+- `Deploy/` - установщик, скрипт удаления и инструкции по развёртыванию.
 
-The project targets .NET Framework 4.7.2 and VSTO. Building the add-in requires Visual Studio/MSBuild with Office/VSTO targets installed.
+## Разработка
 
-Tests:
+Проект использует .NET Framework 4.7.2 и VSTO. Для сборки надстройки нужен Visual Studio/MSBuild с установленными Office/VSTO targets.
+
+Тесты:
 
 ```powershell
 dotnet restore VSTO2\OutlookAI.Tests\OutlookAI.Tests.csproj

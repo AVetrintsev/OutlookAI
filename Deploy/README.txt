@@ -1,29 +1,31 @@
-OutlookAI - Deployment Guide
-============================
+OutlookAI - инструкция по развёртыванию
+======================================
 
-OutlookAI v3 uses a configurable LiteLLM connector.
+OutlookAI v3 использует настраиваемый LiteLLM-коннектор.
 
-The installer writes server defaults to:
+Установщик записывает серверные значения по умолчанию в:
   C:\Program Files\OutlookAI\config.xml
 
-Users provide their own LiteLLM API key in OutlookAI Settings. API keys are
-stored per user under:
+Пользователи вводят собственный ключ API LiteLLM в настройках OutlookAI.
+Ключи API хранятся отдельно для каждого пользователя:
   %APPDATA%\OutlookAI\config.xml
 
+Пароль администратора для ввода пользовательского ключа API не нужен.
 
-PREREQUISITES
--------------
-- Windows 10 / 11 or Windows Server 2019 / 2022 / 2025.
-- Microsoft Outlook desktop.
-- .NET Framework 4.7.2 or later.
+
+ТРЕБОВАНИЯ
+----------
+- Windows 10 / 11 или Windows Server 2019 / 2022 / 2025.
+- Microsoft Outlook для рабочего стола.
+- .NET Framework 4.7.2 или новее.
 - Visual Studio Tools for Office Runtime:
   https://aka.ms/VSTORuntime
 - Microsoft Edge WebView2 Evergreen Runtime.
 
 
-INSTALL
--------
-Publish the VSTO build, then run PowerShell as Administrator:
+УСТАНОВКА
+---------
+Опубликуйте VSTO-сборку, затем запустите PowerShell от имени администратора:
 
   .\Deploy\Install-OutlookAI.ps1 `
     -SourcePath "C:\OutlookAI" `
@@ -33,39 +35,42 @@ Publish the VSTO build, then run PowerShell as Administrator:
     -Temperature 0.2 `
     -MaxTokens 4096
 
-The LiteLLM base URL should be the OpenAI-compatible API root. The add-in
-will call:
+`LiteLlmBaseUrl` должен указывать на корень OpenAI-compatible API.
+Надстройка будет вызывать:
   <LiteLlmBaseUrl>/chat/completions
   <LiteLlmBaseUrl>/audio/transcriptions
 
 
-WHAT THE INSTALLER DOES
------------------------
-1. Cleans stale OutlookAI VSTO/ClickOnce registrations.
-2. Copies the published build to C:\Program Files\OutlookAI.
-3. Writes config.xml with LiteLLM base URL, model, voice model, temperature,
-   max tokens, and max bulk export rows.
-4. Installs or verifies WebView2.
-5. Registers the Outlook add-in for all users.
+ЧТО ДЕЛАЕТ УСТАНОВЩИК
+--------------------
+1. Очищает старые регистрации OutlookAI VSTO/ClickOnce.
+2. Копирует опубликованную сборку в C:\Program Files\OutlookAI.
+3. Записывает config.xml с LiteLLM base URL, model, voice model,
+   temperature, max tokens и max bulk export rows.
+4. Устанавливает или проверяет WebView2.
+5. Регистрирует надстройку Outlook для всех пользователей.
 
-The installer does not install, share, or rotate API keys.
-
-
-USER FIRST RUN
---------------
-1. Open Outlook.
-2. Open OutlookAI Settings.
-3. Enter the admin password.
-4. Enter the user's LiteLLM API key.
-5. Run a quick action or send a chat message.
+Установщик не устанавливает, не расшаривает и не ротирует ключи API.
 
 
-UNINSTALL
----------
-Run PowerShell as Administrator:
+ПЕРВЫЙ ЗАПУСК ПОЛЬЗОВАТЕЛЯ
+--------------------------
+1. Откройте Outlook.
+2. Откройте настройки OutlookAI.
+3. Введите ключ API LiteLLM пользователя.
+4. Запустите быструю команду или отправьте сообщение в чат.
+
+Пароль администратора нужен только для административных настроек, а не для
+ввода пользовательского ключа API.
+
+
+УДАЛЕНИЕ
+--------
+Запустите PowerShell от имени администратора:
 
   .\Deploy\Uninstall-OutlookAI.ps1
 
-This removes the HKLM Outlook add-in registration and
-C:\Program Files\OutlookAI. Per-user API keys remain in each user's AppData
-unless their %APPDATA%\OutlookAI\config.xml is deleted.
+Скрипт удаляет регистрацию надстройки Outlook в HKLM и
+C:\Program Files\OutlookAI. Пользовательские ключи API остаются в AppData,
+пока не будет удалён файл %APPDATA%\OutlookAI\config.xml для конкретного
+пользователя.

@@ -1,12 +1,12 @@
-# Install
+# Установка
 
-Use `Deploy/Install-OutlookAI.ps1` for workstation, RDS, and silent image installs.
+Используйте `Deploy/Install-OutlookAI.ps1` для установки на рабочую станцию, RDS/Terminal Server или в тихий образ развёртывания.
 
-The installer writes the server-side LiteLLM defaults to:
+Установщик записывает серверные значения LiteLLM по умолчанию в:
 
 `C:\Program Files\OutlookAI\config.xml`
 
-Example:
+Пример:
 
 ```powershell
 .\Deploy\Install-OutlookAI.ps1 `
@@ -18,12 +18,14 @@ Example:
   -MaxTokens 4096
 ```
 
-The installer does **not** write API keys. Each user opens OutlookAI Settings and enters their own LiteLLM API key, which is stored in that user's `%APPDATA%\OutlookAI\config.xml`.
+Установщик **не** записывает ключи API. Каждый пользователь открывает настройки OutlookAI и вводит собственный ключ API LiteLLM. Ключ хранится в пользовательском `%APPDATA%\OutlookAI\config.xml`.
 
-Basic verification:
+Пароль администратора для ввода пользовательского ключа API не нужен. Он должен использоваться только для административных настроек.
 
-1. Outlook shows the `AI Assistant` ribbon group.
-2. Open Settings and enter the admin password.
-3. Confirm the LiteLLM endpoint/model values are shown.
-4. Enter the user's LiteLLM API key.
-5. Run a quick action or send a chat message.
+Базовая проверка:
+
+1. В Outlook отображается группа ленты `AI Assistant`.
+2. Откройте настройки OutlookAI.
+3. Убедитесь, что отображаются правильные значения LiteLLM endpoint/model.
+4. Введите пользовательский ключ API LiteLLM.
+5. Запустите быструю команду или отправьте сообщение в чат.

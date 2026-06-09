@@ -64,25 +64,25 @@ namespace OutlookAI.TaskPane
             this.tabControl.Font = new System.Drawing.Font("Segoe UI", 9F);
 
             // tabActions
-            this.tabActions.Text = "\u2728 Actions";
+            this.tabActions.Text = "\u2728 Действия";
             this.tabActions.BackColor = System.Drawing.Color.FromArgb(250, 249, 248);
             this.tabActions.UseVisualStyleBackColor = true;
             this.tabActions.AutoScroll = true;
 
             // tabChat
-            this.tabChat.Text = "\uD83D\uDCAC Chat";
+            this.tabChat.Text = "\uD83D\uDCAC Чат";
             this.tabChat.BackColor = System.Drawing.Color.FromArgb(250, 249, 248);
             this.tabChat.UseVisualStyleBackColor = true;
 
             // tabVariants
-            this.tabVariants.Text = "\uD83C\uDFAD Variants";
+            this.tabVariants.Text = "\uD83C\uDFAD Варианты";
             this.tabVariants.BackColor = System.Drawing.Color.FromArgb(250, 249, 248);
             this.tabVariants.UseVisualStyleBackColor = true;
 
             // lblChatPlaceholder - briefly visible while WebView2 initializes;
             // ChatController.InitializeAsync replaces this with the WebView2
             // control (or with a friendly fallback if the runtime is missing).
-            this.lblChatPlaceholder.Text = "Loading chat...";
+            this.lblChatPlaceholder.Text = "Загрузка чата...";
             this.lblChatPlaceholder.Font = new System.Drawing.Font("Segoe UI", 9F);
             this.lblChatPlaceholder.ForeColor = System.Drawing.Color.DarkSlateGray;
             this.lblChatPlaceholder.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -90,7 +90,7 @@ namespace OutlookAI.TaskPane
             this.tabChat.Controls.Add(this.lblChatPlaceholder);
 
             // lblVariantsPlaceholder (filled by VariantsController in Tasks 35-36)
-            this.lblVariantsPlaceholder.Text = "Drafting variants are generated here.\r\n\r\nUse the Actions tab to draft an email\r\nfirst, then come back to generate alternatives.";
+            this.lblVariantsPlaceholder.Text = "Здесь создаются варианты черновика.\r\n\r\nСначала создайте письмо на вкладке «Действия»,\r\nзатем вернитесь сюда за альтернативами.";
             this.lblVariantsPlaceholder.Font = new System.Drawing.Font("Segoe UI", 9F);
             this.lblVariantsPlaceholder.ForeColor = System.Drawing.Color.DarkSlateGray;
             this.lblVariantsPlaceholder.Location = new System.Drawing.Point(12, 12);
@@ -104,7 +104,7 @@ namespace OutlookAI.TaskPane
             this.lblTitle.Location = new System.Drawing.Point(10, 10);
             this.lblTitle.Name = "lblTitle";
             this.lblTitle.Size = new System.Drawing.Size(150, 21);
-            this.lblTitle.Text = "AI Writing Assistant";
+            this.lblTitle.Text = "AI-помощник для писем";
 
             // btnSettings
             this.btnSettings.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -131,7 +131,7 @@ namespace OutlookAI.TaskPane
             this.grpQuickActions.Size = new System.Drawing.Size(240, 95);
             this.grpQuickActions.TabIndex = 0;
             this.grpQuickActions.TabStop = false;
-            this.grpQuickActions.Text = "Quick Actions (Edit Current Email)";
+            this.grpQuickActions.Text = "Быстрые действия";
 
             // btnProofread
             this.btnProofread.Font = new System.Drawing.Font("Segoe UI", 8F);
@@ -139,7 +139,7 @@ namespace OutlookAI.TaskPane
             this.btnProofread.BackColor = System.Drawing.SystemColors.ButtonFace;
             this.btnProofread.Location = new System.Drawing.Point(10, 22);
             this.btnProofread.Size = new System.Drawing.Size(70, 28);
-            this.btnProofread.Text = "Proofread";
+            this.btnProofread.Text = "Проверить";
             this.btnProofread.UseVisualStyleBackColor = false;
             this.btnProofread.Click += new System.EventHandler(this.btnProofread_Click);
 
@@ -149,7 +149,7 @@ namespace OutlookAI.TaskPane
             this.btnRevise.BackColor = System.Drawing.SystemColors.ButtonFace;
             this.btnRevise.Location = new System.Drawing.Point(85, 22);
             this.btnRevise.Size = new System.Drawing.Size(70, 28);
-            this.btnRevise.Text = "Revise";
+            this.btnRevise.Text = "Улучшить";
             this.btnRevise.UseVisualStyleBackColor = false;
             this.btnRevise.Click += new System.EventHandler(this.btnRevise_Click);
 
@@ -159,7 +159,7 @@ namespace OutlookAI.TaskPane
             this.btnShorten.BackColor = System.Drawing.SystemColors.ButtonFace;
             this.btnShorten.Location = new System.Drawing.Point(160, 22);
             this.btnShorten.Size = new System.Drawing.Size(70, 28);
-            this.btnShorten.Text = "Shorten";
+            this.btnShorten.Text = "Короче";
             this.btnShorten.UseVisualStyleBackColor = false;
             this.btnShorten.Click += new System.EventHandler(this.btnShorten_Click);
 
@@ -169,7 +169,7 @@ namespace OutlookAI.TaskPane
             this.btnLengthen.BackColor = System.Drawing.SystemColors.ButtonFace;
             this.btnLengthen.Location = new System.Drawing.Point(10, 55);
             this.btnLengthen.Size = new System.Drawing.Size(70, 28);
-            this.btnLengthen.Text = "Lengthen";
+            this.btnLengthen.Text = "Длиннее";
             this.btnLengthen.UseVisualStyleBackColor = false;
             this.btnLengthen.Click += new System.EventHandler(this.btnLengthen_Click);
 
@@ -179,7 +179,7 @@ namespace OutlookAI.TaskPane
             this.btnFormal.BackColor = System.Drawing.SystemColors.ButtonFace;
             this.btnFormal.Location = new System.Drawing.Point(85, 55);
             this.btnFormal.Size = new System.Drawing.Size(70, 28);
-            this.btnFormal.Text = "Formal";
+            this.btnFormal.Text = "Формально";
             this.btnFormal.UseVisualStyleBackColor = false;
             this.btnFormal.Click += new System.EventHandler(this.btnFormal_Click);
 
@@ -189,7 +189,7 @@ namespace OutlookAI.TaskPane
             this.btnFriendly.BackColor = System.Drawing.SystemColors.ButtonFace;
             this.btnFriendly.Location = new System.Drawing.Point(160, 55);
             this.btnFriendly.Size = new System.Drawing.Size(70, 28);
-            this.btnFriendly.Text = "Friendly";
+            this.btnFriendly.Text = "Мягче";
             this.btnFriendly.UseVisualStyleBackColor = false;
             this.btnFriendly.Click += new System.EventHandler(this.btnFriendly_Click);
 
@@ -203,7 +203,7 @@ namespace OutlookAI.TaskPane
             this.grpDraft.Size = new System.Drawing.Size(240, 110);
             this.grpDraft.TabIndex = 1;
             this.grpDraft.TabStop = false;
-            this.grpDraft.Text = "Draft New Email";
+            this.grpDraft.Text = "Новое письмо";
 
             // txtDraftPrompt
             this.txtDraftPrompt.Font = new System.Drawing.Font("Segoe UI", 8F);
@@ -229,7 +229,7 @@ namespace OutlookAI.TaskPane
             this.btnDraft.BackColor = System.Drawing.SystemColors.ButtonFace;
             this.btnDraft.Location = new System.Drawing.Point(10, 78);
             this.btnDraft.Size = new System.Drawing.Size(220, 26);
-            this.btnDraft.Text = "Draft Email";
+            this.btnDraft.Text = "Создать черновик";
             this.btnDraft.UseVisualStyleBackColor = false;
             this.btnDraft.Click += new System.EventHandler(this.btnDraft_Click);
 
@@ -255,7 +255,7 @@ namespace OutlookAI.TaskPane
             this.lblResult.AutoSize = true;
             this.lblResult.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
             this.lblResult.Location = new System.Drawing.Point(0, 0);
-            this.lblResult.Text = "Result:";
+            this.lblResult.Text = "Результат:";
 
             // txtResult
             this.txtResult.Font = new System.Drawing.Font("Segoe UI", 8F);
@@ -271,7 +271,7 @@ namespace OutlookAI.TaskPane
             this.btnInsert.BackColor = System.Drawing.SystemColors.ButtonFace;
             this.btnInsert.Location = new System.Drawing.Point(0, 150);
             this.btnInsert.Size = new System.Drawing.Size(75, 26);
-            this.btnInsert.Text = "Insert";
+            this.btnInsert.Text = "Вставить";
             this.btnInsert.UseVisualStyleBackColor = false;
             this.btnInsert.Click += new System.EventHandler(this.btnInsert_Click);
 
@@ -281,7 +281,7 @@ namespace OutlookAI.TaskPane
             this.btnReplace.BackColor = System.Drawing.SystemColors.ButtonFace;
             this.btnReplace.Location = new System.Drawing.Point(80, 150);
             this.btnReplace.Size = new System.Drawing.Size(75, 26);
-            this.btnReplace.Text = "Replace";
+            this.btnReplace.Text = "Заменить";
             this.btnReplace.UseVisualStyleBackColor = false;
             this.btnReplace.Click += new System.EventHandler(this.btnReplace_Click);
 
@@ -291,7 +291,7 @@ namespace OutlookAI.TaskPane
             this.btnDiscard.BackColor = System.Drawing.SystemColors.ButtonFace;
             this.btnDiscard.Location = new System.Drawing.Point(160, 150);
             this.btnDiscard.Size = new System.Drawing.Size(75, 26);
-            this.btnDiscard.Text = "Discard";
+            this.btnDiscard.Text = "Сбросить";
             this.btnDiscard.UseVisualStyleBackColor = false;
             this.btnDiscard.Click += new System.EventHandler(this.btnDiscard_Click);
 

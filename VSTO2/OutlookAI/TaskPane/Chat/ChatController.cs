@@ -74,7 +74,7 @@ namespace OutlookAI.TaskPane.Chat
             if (!WebView2Bootstrap.IsRuntimeInstalled())
             {
                 TraceLog.Write("WebView2 runtime NOT installed; showing fallback", "ChatController");
-                ShowFallback("WebView2 runtime not installed.\r\nRun the installer or download:\r\n" +
+                ShowFallback("Среда WebView2 Runtime не установлена.\r\nЗапустите установщик или скачайте её:\r\n" +
                              "https://developer.microsoft.com/microsoft-edge/webview2/");
                 return;
             }
@@ -99,7 +99,7 @@ namespace OutlookAI.TaskPane.Chat
             {
                 TraceLog.Write("InitializeAsync EXCEPTION: " + ex, "ChatController");
                 System.Diagnostics.Debug.WriteLine("ChatController.InitializeAsync: " + ex);
-                ShowFallback("WebView2 failed to initialize: " + ex.Message);
+                ShowFallback("Не удалось инициализировать WebView2: " + ex.Message);
             }
         }
 

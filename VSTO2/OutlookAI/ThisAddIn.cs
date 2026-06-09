@@ -155,8 +155,8 @@ namespace OutlookAI
                 // Fallback: no compose window or inbox view in focus.
                 TraceLog.Write("No Inspector or Explorer active; showing info dialog", "ThisAddIn");
                 System.Windows.Forms.MessageBox.Show(
-                    "Open Outlook to your Inbox or compose an email, then click AI Assistant.",
-                    "AI Assistant",
+                    "Откройте папку Входящие или окно создания письма, затем нажмите AI-помощник.",
+                    "AI-помощник",
                     System.Windows.Forms.MessageBoxButtons.OK,
                     System.Windows.Forms.MessageBoxIcon.Information);
             }
@@ -164,8 +164,8 @@ namespace OutlookAI
             {
                 TraceLog.Write("ShowTaskPane error: " + ex, "ThisAddIn");
                 System.Windows.Forms.MessageBox.Show(
-                    $"Error: {ex.Message}",
-                    "AI Assistant",
+                    $"Ошибка: {ex.Message}",
+                    "AI-помощник",
                     System.Windows.Forms.MessageBoxButtons.OK,
                     System.Windows.Forms.MessageBoxIcon.Error);
             }
@@ -190,7 +190,7 @@ namespace OutlookAI
             TraceLog.Write("Creating new AITaskPane for Inspector", "ThisAddIn");
             var taskPaneControl = new AITaskPane();
             taskPaneControl.Bind(inspector);
-            var customTaskPane = this.CustomTaskPanes.Add(taskPaneControl, "AI Assistant", inspector);
+            var customTaskPane = this.CustomTaskPanes.Add(taskPaneControl, "AI-помощник", inspector);
             customTaskPane.Width = 340;
             customTaskPane.Visible = true;
             TraceLog.Write("Inspector CustomTaskPane.Visible = true", "ThisAddIn");
@@ -214,7 +214,7 @@ namespace OutlookAI
             TraceLog.Write("Creating new InboxCopilotPane for Explorer", "ThisAddIn");
             var paneControl = new InboxCopilotPane();
             paneControl.Bind(explorer);
-            var ctp = this.CustomTaskPanes.Add(paneControl, "AI Assistant", explorer);
+            var ctp = this.CustomTaskPanes.Add(paneControl, "AI-помощник", explorer);
             ctp.Width = 340;
             ctp.Visible = true;
             TraceLog.Write("Explorer CustomTaskPane.Visible = true", "ThisAddIn");
@@ -237,8 +237,8 @@ namespace OutlookAI
                     // Reports only makes sense on an Explorer (Inbox view),
                     // not on a compose window.
                     System.Windows.Forms.MessageBox.Show(
-                        "Open Outlook to your Inbox, then click Reports.",
-                        "Inbox Reports",
+                        "Откройте папку Входящие, затем нажмите Отчёты.",
+                        "Отчёты по почте",
                         System.Windows.Forms.MessageBoxButtons.OK,
                         System.Windows.Forms.MessageBoxIcon.Information);
                 }
@@ -246,8 +246,8 @@ namespace OutlookAI
                 {
                     TraceLog.Write("ShowReportsTaskPane error: " + ex, "ThisAddIn");
                     System.Windows.Forms.MessageBox.Show(
-                        $"Error: {ex.Message}",
-                        "Inbox Reports",
+                        $"Ошибка: {ex.Message}",
+                        "Отчёты по почте",
                         System.Windows.Forms.MessageBoxButtons.OK,
                         System.Windows.Forms.MessageBoxIcon.Error);
                 }
@@ -267,7 +267,7 @@ namespace OutlookAI
             TraceLog.Write("Creating new InboxReportsPane for Explorer", "ThisAddIn");
             var paneControl = new OutlookAI.TaskPane.InboxReports.InboxReportsPane();
             paneControl.Bind(explorer);
-            var ctp = this.CustomTaskPanes.Add(paneControl, "Inbox Reports", explorer);
+            var ctp = this.CustomTaskPanes.Add(paneControl, "Отчёты по почте", explorer);
             ctp.Width = 340;
             ctp.Visible = true;
             TraceLog.Write("Reports CustomTaskPane.Visible = true", "ThisAddIn");

@@ -4,18 +4,18 @@
 		<tabs>
 			<!-- Phase 2: compose-window ribbon button. -->
 			<tab idMso="TabNewMailMessage">
-				<group id="AIAssistantGroup" label="AI Assistant" insertAfterMso="GroupClipboard">
+				<group id="AIAssistantGroup" label="AI-помощник" insertAfterMso="GroupClipboard">
 					<button id="btnAIAssistant"
-							label="AI Assistant"
+							label="AI-помощник"
 							size="large"
 							onAction="OnAIAssistantClick"
-							supertip="Open the AI Writing Assistant to help proofread, revise, and write emails."
+							supertip="Открыть AI-помощника для проверки, редактирования и написания писем."
 							imageMso="SmartArtChangeColorsGallery" />
 					<button id="btnSettingsCompose"
-							label="Settings"
+							label="Настройки"
 							size="large"
 							onAction="OnSettingsClick"
-							supertip="Open OutlookAI Settings to enter your LiteLLM API key."
+							supertip="Открыть настройки OutlookAI и ввести ключ API LiteLLM."
 							imageMso="FileProperties" />
 				</group>
 			</tab>
@@ -23,24 +23,24 @@
 			     handler; ThisAddIn.ShowTaskPane context-routes based on
 			     Application.ActiveWindow(). -->
 			<tab idMso="TabMail">
-				<group id="AIAssistantExplorerGroup" label="AI Assistant" insertAfterMso="GroupMailMove">
+				<group id="AIAssistantExplorerGroup" label="AI-помощник" insertAfterMso="GroupMailMove">
 					<button id="btnAIAssistantExplorer"
-							label="AI Assistant"
+							label="AI-помощник"
 							size="large"
 							onAction="OnAIAssistantClick"
-							supertip="Open the AI Assistant to chat with your mailbox - summarize, search, and act on messages."
+							supertip="Открыть AI-помощника для работы с почтой: поиск, сводки и действия с сообщениями."
 							imageMso="SmartArtChangeColorsGallery" />
 					<button id="btnReports"
-							label="Reports"
+							label="Отчёты"
 							size="large"
 							onAction="OnReportsClick"
-							supertip="Open the Inbox Reports pane to generate digests, action items, conversation summaries, and stats."
+							supertip="Открыть панель отчётов по почте: дайджесты, задачи, сводки переписок и статистика."
 							imageMso="PivotTableInsert" />
 					<button id="btnSettingsExplorer"
-							label="Settings"
+							label="Настройки"
 							size="large"
 							onAction="OnSettingsClick"
-							supertip="Open OutlookAI Settings to enter your LiteLLM API key."
+							supertip="Открыть настройки OutlookAI и ввести ключ API LiteLLM."
 							imageMso="FileProperties" />
 				</group>
 			</tab>

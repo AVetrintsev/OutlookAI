@@ -100,9 +100,9 @@
 
   function formatLabel(format) {
     switch (String(format || '').toLowerCase()) {
-      case 'xlsx': return 'Excel Workbook';
-      case 'pdf': return 'PDF Document';
-      default: return format ? String(format).toUpperCase() : 'File';
+      case 'xlsx': return 'Книга Excel';
+      case 'pdf': return 'PDF-документ';
+      default: return format ? String(format).toUpperCase() : 'Файл';
     }
   }
 
@@ -145,7 +145,7 @@
     }
 
     var filePath = String(fileInfo.path);
-    var filename = fileInfo.filename || filenameFromPath(filePath) || 'Saved file';
+    var filename = fileInfo.filename || filenameFromPath(filePath) || 'Сохранённый файл';
     var format = String(fileInfo.format || '').toLowerCase();
     var bytes = formatBytes(fileInfo.bytes);
     var label = formatLabel(fileInfo.format);
@@ -164,13 +164,13 @@
     card.appendChild(meta);
 
     var actions = elt('div', 'file-card-actions');
-    var open = elt('button', 'file-card-btn', 'Open');
+    var open = elt('button', 'file-card-btn', 'Открыть');
     open.type = 'button';
     open.addEventListener('click', function() {
       postFileAction('open_file', filePath);
     });
 
-    var reveal = elt('button', 'file-card-btn', 'Show in folder');
+    var reveal = elt('button', 'file-card-btn', 'Показать в папке');
     reveal.type = 'button';
     reveal.addEventListener('click', function() {
       postFileAction('reveal_in_explorer', filePath);
@@ -224,7 +224,7 @@
     card.appendChild(elt('div', 'error-card-icon'));
 
     var body = elt('div', 'error-card-body');
-    body.appendChild(elt('div', 'error-card-title', 'Export failed'));
+    body.appendChild(elt('div', 'error-card-title', 'Не удалось экспортировать'));
     var detail = elt('div', 'error-card-detail');
     detail.textContent = exportErrorMessage(err);
     body.appendChild(detail);
@@ -236,7 +236,7 @@
     if (isRetryableExportError(err) && retryMessageId !== undefined && retryMessageId !== null && retryMessageId !== '') {
       var retryEntry = assistantMessages[retryMessageId];
       if (retryEntry && retryEntry.exportButton) {
-        var retry = elt('button', 'error-card-btn', 'Retry');
+        var retry = elt('button', 'error-card-btn', 'Повторить');
         retry.type = 'button';
         retry.addEventListener('click', function() {
           handleExportPdf(retryMessageId);
@@ -247,7 +247,7 @@
     }
 
     if (code === 'webview2_missing') {
-      var install = elt('a', 'error-card-link', 'Install WebView2 Runtime');
+      var install = elt('a', 'error-card-link', 'Установить WebView2 Runtime');
       install.href = 'https://developer.microsoft.com/microsoft-edge/webview2/';
       install.target = '_blank';
       install.rel = 'noopener noreferrer';
@@ -283,7 +283,7 @@
       if (!obj || !obj.error || typeof obj.error !== 'object') return null;
       return {
         error: obj.error.code || 'pdf_render_failed',
-        detail: obj.error.message || obj.error.detail || 'Unknown export error.'
+        detail: obj.error.message || obj.error.detail || 'Неизвестная ошибка экспорта.'
       };
     } catch (e) {
       return null;
@@ -291,7 +291,7 @@
   }
 
   function exportErrorMessage(error) {
-    var fallback = 'Unknown export error.';
+    var fallback = 'Неизвестная ошибка экспорта.';
     try {
       if (!error) return fallback;
       if (typeof error === 'string') return error || fallback;
@@ -321,14 +321,14 @@
         if (heading) return heading.substring(0, 60);
       }
     }
-    return 'OutlookAI Report';
+    return 'Отчёт OutlookAI';
   }
 
   function createExportPdfButton(messageId) {
     var btn = elt('button', 'msg-action msg-action-pdf', 'PDF');
     btn.type = 'button';
-    btn.title = 'Save message as PDF';
-    btn.setAttribute('aria-label', 'Save message as PDF');
+    btn.title = 'Сохранить сообщение как PDF';
+    btn.setAttribute('aria-label', 'Сохранить сообщение как PDF');
     btn.disabled = true;
     btn.dataset.defaultText = btn.textContent;
     btn.addEventListener('click', function() {
@@ -343,7 +343,7 @@
     if (!btn) return;
     btn.disabled = true;
     btn.dataset.exportPending = pending ? '1' : '0';
-    if (pending) btn.textContent = 'Saving...';
+    if (pending) btn.textContent = 'Сохранение...';
   }
 
   function resetExportButton(messageId) {
@@ -456,18 +456,18 @@
     // to "Working on it..." so unknown future tools still render fine.
     appendToolCallCard: function(callId, name, argsJson) {
       var verb = ({
-        outlook_get_current_compose_state: 'Reading compose context',
-        outlook_get_current_selection:     'Reading current selection',
-        outlook_list_folders:              'Listing folders',
-        outlook_search_messages:           'Searching messages',
-        outlook_read_message:              'Reading message',
-        outlook_count_messages:            'Counting messages',
-        outlook_list_recent_threads_with:  'Listing recent threads',
-        outlook_create_draft:              'Creating draft',
-        outlook_mark_as_read:              'Marking as read',
-        outlook_flag_message:              'Flagging message',
-        outlook_set_category:              'Setting category',
-      })[name] || 'Working on it';
+        outlook_get_current_compose_state: 'Читаю контекст письма',
+        outlook_get_current_selection:     'Читаю текущее выделение',
+        outlook_list_folders:              'Получаю список папок',
+        outlook_search_messages:           'Ищу сообщения',
+        outlook_read_message:              'Читаю сообщение',
+        outlook_count_messages:            'Считаю сообщения',
+        outlook_list_recent_threads_with:  'Ищу недавние переписки',
+        outlook_create_draft:              'Создаю черновик',
+        outlook_mark_as_read:              'Отмечаю как прочитанное',
+        outlook_flag_message:              'Ставлю флаг на сообщение',
+        outlook_set_category:              'Назначаю категорию',
+      })[name] || 'Выполняю действие';
 
       var row = elt('div', 'tool-status');
       row.dataset.callId = callId;
@@ -539,7 +539,7 @@
           if (row.parentNode) row.parentNode.removeChild(row);
         } else {
           row.classList.add('tool-status-err');
-          row.textContent = '\u26A0 ' + (summary || 'tool error');
+          row.textContent = '\u26A0 ' + (summary || 'ошибка инструмента');
         }
       }
       delete toolCards[callId];
@@ -572,7 +572,7 @@
     showError: function(message) {
       var node = elt('div', 'msg msg-assistant msg-error');
       var content = elt('div', 'msg-content');
-      content.textContent = message || 'An error occurred.';
+      content.textContent = message || 'Произошла ошибка.';
       node.appendChild(content);
       $messages.appendChild(node);
       scrollToBottom();
@@ -624,14 +624,14 @@
       //   Compose shape:  { subject, recipients, thread }
       // Disambiguate by checking for ctx.folder.
       if (ctx.folder !== undefined) {
-        var unread = (ctx.unread_count != null) ? (' (' + ctx.unread_count + ' unread)') : '';
-        $ctxSubject.textContent = 'In: ' + ctx.folder + unread;
+        var unread = (ctx.unread_count != null) ? (' (' + ctx.unread_count + ' непрочит.)') : '';
+        $ctxSubject.textContent = 'Папка: ' + ctx.folder + unread;
         if (ctx.selection && ctx.selection.count > 0) {
           if (ctx.selection.count === 1) {
-            $ctxRecipients.textContent = 'Selected: ' + (ctx.selection.subject || '') +
+            $ctxRecipients.textContent = 'Выбрано: ' + (ctx.selection.subject || '') +
               (ctx.selection.from ? (' \u2014 ' + ctx.selection.from) : '');
           } else {
-            $ctxRecipients.textContent = 'Selected: ' + ctx.selection.count + ' messages';
+            $ctxRecipients.textContent = 'Выбрано сообщений: ' + ctx.selection.count;
           }
         } else {
           $ctxRecipients.textContent = '';
@@ -640,9 +640,9 @@
         return;
       }
       // Compose shape (Phase 2 behaviour unchanged).
-      $ctxSubject.textContent = ctx.subject ? ('Re: ' + ctx.subject) : 'New email';
+      $ctxSubject.textContent = ctx.subject ? ('Re: ' + ctx.subject) : 'Новое письмо';
       var recipients = (ctx.recipients || []).join(', ');
-      $ctxRecipients.textContent = recipients ? ('To: ' + recipients) : '';
+      $ctxRecipients.textContent = recipients ? ('Кому: ' + recipients) : '';
       $ctxThread.textContent = ctx.thread || '';
     },
 
@@ -701,7 +701,7 @@
       while ($reasoning.firstChild) $reasoning.removeChild($reasoning.firstChild);
       var def = document.createElement('option');
       def.value = '';
-      def.textContent = '(default)';
+      def.textContent = '(по умолчанию)';
       $reasoning.appendChild(def);
       (opts || []).forEach(function(name) {
         var el = document.createElement('option');

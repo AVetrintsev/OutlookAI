@@ -45,6 +45,11 @@
     Optional manifest signing certificate thumbprint forwarded to
     Make-ReleaseZip.ps1.
 
+.PARAMETER ExeOnly
+    Deletes the intermediate release ZIP and SHA256 sidecars after the EXE is
+    created. Use this for local user-facing builds where only one file should
+    remain in the output directory.
+
 .EXAMPLE
     .\Deploy\Make-InstallerExe.ps1 `
       -Tag v3.0.0 `
@@ -62,7 +67,9 @@ param(
     [double]$Temperature = 0.2,
     [int]$MaxTokens = 4096,
     [int]$MaxBulkExportRows = 2000,
-    [string]$CertThumbprint = ""
+    [string]$CertThumbprint = "",
+    [switch]$KeepIntermediate,
+    [switch]$ExeOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -265,6 +272,16 @@ SourceFiles0=$packageRoot
 
     Write-Host "Built $exePath" -ForegroundColor Green
     Write-Host "SHA256 $sha" -ForegroundColor Green
+
+    if ($ExeOnly) {
+        Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath ($zipPath + ".sha256") -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath ($exePath + ".sha256") -Force -ErrorAction SilentlyContinue
+    }
+
+    if (-not $KeepIntermediate) {
+        Remove-Item -LiteralPath $packageRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 finally {
     Pop-Location

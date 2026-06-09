@@ -89,7 +89,7 @@ namespace OutlookAI
             {
                 Location = new Point(0, 110),
                 Size = new Size(460, 420),
-                Visible = false,
+                Visible = true,
                 AutoScroll = true
             };
 
@@ -97,6 +97,7 @@ namespace OutlookAI
             BuildAdminGroup();
             BuildAiBehaviorGroup();
             Controls.Add(_panelSettings);
+            UpdateCredentialUi(GetCurrentStatus());
         }
 
         private void BuildConnectorGroup()
@@ -294,7 +295,6 @@ namespace OutlookAI
             if (_txtPassword.Text == Config.AdminPassword)
             {
                 _authenticated = true;
-                _panelSettings.Visible = true;
                 _lblError.Visible = false;
                 _txtPassword.Enabled = false;
                 UpdateCredentialUi(GetCurrentStatus());
@@ -308,7 +308,7 @@ namespace OutlookAI
 
         private void BtnSaveApiKey_Click(object sender, EventArgs e)
         {
-            if (!_authenticated || _credentials == null)
+            if (_credentials == null)
             {
                 return;
             }
@@ -318,7 +318,7 @@ namespace OutlookAI
 
         private async void BtnClearApiKey_Click(object sender, EventArgs e)
         {
-            if (!_authenticated || _credentials == null)
+            if (_credentials == null)
             {
                 return;
             }

@@ -25,7 +25,8 @@
 param(
     [Parameter(Mandatory=$true)][string]$Tag,
     [string]$OutDir = "out",
-    [string]$CertThumbprint = ""
+    [string]$CertThumbprint = "",
+    [switch]$KeepIntermediate
 )
 
 $ErrorActionPreference = "Stop"
@@ -315,6 +316,10 @@ $details
 
     Write-Host "Built $zipPath" -ForegroundColor Green
     Write-Host "SHA256 $sha" -ForegroundColor Green
+
+    if (-not $KeepIntermediate) {
+        Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 finally {
     if (-not [string]::IsNullOrWhiteSpace($temporaryCertThumbprint)) {

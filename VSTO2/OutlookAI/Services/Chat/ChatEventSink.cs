@@ -1,10 +1,10 @@
-namespace OutlookAI.Services.Chat
+﻿namespace OutlookAI.Services.Chat
 {
     /// <summary>
     /// Streaming callback surface for one chat turn. Override only the
     /// callbacks you care about. Defaults are no-ops so callers can construct
     /// a bare <c>ChatEventSink</c> when they don't care about events
-    /// (e.g. <c>CodexChatService.RunTurnAsync</c> uses an empty instance as
+    /// (e.g. <c>LiteLlmChatService.RunTurnAsync</c> uses an empty instance as
     /// its default sink).
     /// </summary>
     public class ChatEventSink

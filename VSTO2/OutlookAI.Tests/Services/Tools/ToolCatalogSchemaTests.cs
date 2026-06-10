@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using Newtonsoft.Json.Linq;
 using OutlookAI.Services.Tools;
 using Xunit;
@@ -10,7 +10,7 @@ namespace OutlookAI.Tests.Services.Tools
     /// Inbox Copilot used to fire 20+ <c>outlook_search_messages</c> calls
     /// with empty args, returning only the newest inbox messages. Two
     /// independent fixes prevent recurrence: (1) the SSE delta-accumulation
-    /// fix in <c>CodexChatService</c> (so args actually reach us), and
+    /// fix in <c>LiteLlmChatService</c> (so args actually reach us), and
     /// (2) explicit examples in the tool description that show the model
     /// how to map natural language to structured fields. These tests pin (2).
     /// </summary>

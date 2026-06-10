@@ -18,8 +18,8 @@ namespace OutlookAI.TaskPane.InboxCopilot
         /// Build the default chip set for a given selection count.
         /// Three static chips plus 0 or 2 dynamic chips:
         ///   0 selected -> static only
-        ///   1 selected -> static + "Summarize this thread" + "Draft a reply"
-        ///   2+ selected -> static + "Summarize all selected" + "Triage selected"
+        ///   1 selected -> static + summarize thread + draft reply
+        ///   2+ selected -> static + summarize selected + triage selected
         /// </summary>
         public static IReadOnlyList<QuickActionChip> ComputeChipsForSelectionCount(int selectionCount)
         {
@@ -27,18 +27,18 @@ namespace OutlookAI.TaskPane.InboxCopilot
             {
                 new QuickActionChip
                 {
-                    Label = "What needs my attention?",
-                    Prompt = "Look at my inbox and tell me what needs attention. Prioritize by recency, importance, and sender. Be concise.",
+                    Label = "Что требует внимания?",
+                    Prompt = "Посмотри мой почтовый ящик и скажи, что требует внимания. Расставь приоритеты по свежести, важности и отправителю. Ответь кратко.",
                 },
                 new QuickActionChip
                 {
-                    Label = "Summarize unread",
-                    Prompt = "Summarize all my unread messages. Group by sender or topic. Be concise.",
+                    Label = "Сводка непрочитанных",
+                    Prompt = "Сделай сводку всех непрочитанных сообщений. Сгруппируй по отправителю или теме. Ответь кратко.",
                 },
                 new QuickActionChip
                 {
-                    Label = "Today's emails",
-                    Prompt = "Show me everything I received today, grouped by sender. Highlight anything that looks urgent.",
+                    Label = "Письма за сегодня",
+                    Prompt = "Покажи всё, что я получил сегодня, сгруппируй по отправителю. Выдели всё, что выглядит срочным.",
                 },
             };
 
@@ -46,26 +46,26 @@ namespace OutlookAI.TaskPane.InboxCopilot
             {
                 list.Add(new QuickActionChip
                 {
-                    Label = "Summarize this thread",
-                    Prompt = "Summarize the selected message and the rest of its conversation thread.",
+                    Label = "Сводка переписки",
+                    Prompt = "Сделай сводку выбранного сообщения и всей связанной переписки.",
                 });
                 list.Add(new QuickActionChip
                 {
-                    Label = "Draft a reply",
-                    Prompt = "Draft a reply to the selected message. Match the tone of the sender.",
+                    Label = "Черновик ответа",
+                    Prompt = "Подготовь черновик ответа на выбранное сообщение. Сохрани тон отправителя.",
                 });
             }
             else if (selectionCount >= 2)
             {
                 list.Add(new QuickActionChip
                 {
-                    Label = "Summarize all selected",
-                    Prompt = "Summarize all the selected messages.",
+                    Label = "Сводка выбранных",
+                    Prompt = "Сделай сводку всех выбранных сообщений.",
                 });
                 list.Add(new QuickActionChip
                 {
-                    Label = "Triage selected",
-                    Prompt = "Triage the selected messages -- which need action, which can be archived, which can be marked read?",
+                    Label = "Разобрать выбранные",
+                    Prompt = "Разбери выбранные сообщения: какие требуют действия, какие можно архивировать, какие можно отметить прочитанными?",
                 });
             }
 

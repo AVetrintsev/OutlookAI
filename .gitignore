@@ -26,6 +26,7 @@ packages/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+out/
 
 # Build output
 *.dll
@@ -53,6 +54,7 @@ setup.exe
 **/config.xml
 *.pfx
 *.snk
+Deploy/Build-InstallerInteractive.local.json
 
 # Deploy folder binaries (keep scripts)
 Deploy/*.dll

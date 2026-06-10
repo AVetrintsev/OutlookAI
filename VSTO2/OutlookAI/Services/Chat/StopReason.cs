@@ -1,7 +1,7 @@
-namespace OutlookAI.Services.Chat
+﻿namespace OutlookAI.Services.Chat
 {
     /// <summary>
-    /// Why <see cref="OutlookAI.Services.CodexChatService"/> stopped a turn.
+    /// Why <see cref="OutlookAI.Services.LiteLlmChatService"/> stopped a turn.
     /// </summary>
     public enum StopReason
     {

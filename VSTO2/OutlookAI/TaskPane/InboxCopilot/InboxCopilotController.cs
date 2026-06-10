@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,7 +25,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
     public sealed class InboxCopilotController : IDisposable
     {
         private readonly Control _hostContainer;
-        private readonly CodexChatService _chat;
+        private readonly LiteLlmChatService _chat;
         private readonly IToolHost _toolHost;
         private readonly LiveOutlookSurface _surface;
         private readonly ConversationStore _store;
@@ -42,7 +42,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
 
         public InboxCopilotController(
             Control hostContainer,
-            CodexChatService chat,
+            LiteLlmChatService chat,
             IToolHost toolHost,
             LiveOutlookSurface surface,
             ConversationStore store,
@@ -65,7 +65,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             TraceLog.Write(">> InitializeAsync (sync prefix)", "InboxCopilot");
             if (!WebView2Bootstrap.IsRuntimeInstalled())
             {
-                ShowFallback("WebView2 runtime not installed.\r\nRun the installer or download:\r\n" +
+                ShowFallback("Среда WebView2 Runtime не установлена.\r\nЗапустите установщик или скачайте её:\r\n" +
                              "https://developer.microsoft.com/microsoft-edge/webview2/");
                 return;
             }
@@ -87,7 +87,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             catch (Exception ex)
             {
                 TraceLog.Write("InitializeAsync EXCEPTION: " + ex, "InboxCopilot");
-                ShowFallback("WebView2 failed to initialize: " + ex.Message);
+                ShowFallback("Не удалось инициализировать WebView2: " + ex.Message);
             }
         }
 
@@ -308,7 +308,8 @@ namespace OutlookAI.TaskPane.InboxCopilot
             }
             catch (Exception ex)
             {
-                await RunScript("outlookai.showError(" + JsString(ex.Message ?? "") + ");");
+                TraceLog.Write("StartTurnAsync EXCEPTION: " + ex, "InboxCopilot");
+                await RunScript("outlookai.showError(" + JsString(FormatTurnError(ex)) + ");");
             }
             finally
             {
@@ -344,6 +345,20 @@ namespace OutlookAI.TaskPane.InboxCopilot
                 TraceLog.Write("BuildSystemInstructions error: " + ex, "InboxCopilot");
                 return "You are the Outlook Inbox Copilot. Help the user with their mailbox.";
             }
+        }
+
+        private static string FormatTurnError(Exception ex)
+        {
+            var detail = ex?.Message ?? "";
+            if (ex?.InnerException != null && !string.IsNullOrWhiteSpace(ex.InnerException.Message))
+            {
+                detail += " " + ex.InnerException.Message;
+            }
+            if (string.IsNullOrWhiteSpace(detail))
+            {
+                detail = "неизвестная ошибка";
+            }
+            return "Ошибка при обращении к LiteLLM: " + detail;
         }
 
         private async Task RunScript(string script)

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using OutlookAI.Diagnostics;
@@ -34,7 +34,7 @@ namespace OutlookAI.TaskPane.InboxReports
             }
         }
 
-        private CodexChatService ChatService
+        private LiteLlmChatService ChatService
             => Globals.ThisAddIn != null ? Globals.ThisAddIn.ChatService : null;
 
         public void Bind(Outlook.Explorer explorer)

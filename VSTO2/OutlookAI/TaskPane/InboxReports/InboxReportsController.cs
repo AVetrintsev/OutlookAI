@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,7 +26,7 @@ namespace OutlookAI.TaskPane.InboxReports
     public sealed class InboxReportsController : IDisposable
     {
         private readonly Control _hostContainer;
-        private readonly CodexChatService _chat;
+        private readonly LiteLlmChatService _chat;
         private readonly IToolHost _toolHost;
         private readonly LiveOutlookSurface _surface;
         private readonly ConversationStore _store;
@@ -43,7 +43,7 @@ namespace OutlookAI.TaskPane.InboxReports
 
         public InboxReportsController(
             Control hostContainer,
-            CodexChatService chat,
+            LiteLlmChatService chat,
             IToolHost toolHost,
             LiveOutlookSurface surface,
             ConversationStore store)
@@ -64,7 +64,7 @@ namespace OutlookAI.TaskPane.InboxReports
             TraceLog.Write(">> InitializeAsync (sync prefix)", "InboxReports");
             if (!WebView2Bootstrap.IsRuntimeInstalled())
             {
-                ShowFallback("WebView2 runtime not installed.\r\nRun the installer or download:\r\n" +
+                ShowFallback("Среда WebView2 Runtime не установлена.\r\nЗапустите установщик или скачайте её:\r\n" +
                              "https://developer.microsoft.com/microsoft-edge/webview2/");
                 return;
             }
@@ -81,7 +81,7 @@ namespace OutlookAI.TaskPane.InboxReports
             catch (Exception ex)
             {
                 TraceLog.Write("InitializeAsync EXCEPTION: " + ex, "InboxReports");
-                ShowFallback("WebView2 failed to initialize: " + ex.Message);
+                ShowFallback("Не удалось инициализировать WebView2: " + ex.Message);
             }
         }
 
@@ -258,7 +258,8 @@ namespace OutlookAI.TaskPane.InboxReports
             }
             catch (Exception ex)
             {
-                await RunScript("outlookai.showError(" + JsString(ex.Message ?? "") + ");");
+                TraceLog.Write("StartTurnAsync EXCEPTION: " + ex, "InboxReports");
+                await RunScript("outlookai.showError(" + JsString(FormatTurnError(ex)) + ");");
             }
             finally
             {
@@ -295,6 +296,20 @@ namespace OutlookAI.TaskPane.InboxReports
             {
                 TraceLog.Write("RunScript EXCEPTION: " + ex.Message, "InboxReports");
             }
+        }
+
+        private static string FormatTurnError(Exception ex)
+        {
+            var detail = ex?.Message ?? "";
+            if (ex?.InnerException != null && !string.IsNullOrWhiteSpace(ex.InnerException.Message))
+            {
+                detail += " " + ex.InnerException.Message;
+            }
+            if (string.IsNullOrWhiteSpace(detail))
+            {
+                detail = "неизвестная ошибка";
+            }
+            return "Ошибка при обращении к LiteLLM: " + detail;
         }
 
         private static string JsString(string s)

@@ -1,68 +1,49 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
+using OutlookAI.Diagnostics;
 
 namespace OutlookAI
 {
     public static class Config
     {
         // ============================================================
-        // CONFIGURATION DEFAULTS (v2 - ChatGPT OAuth)
-        // Server-authoritative fields (CodexAuthPath, Model) load from
-        // defaults -> global config (Program Files). Per-user AppData
-        // config may override only AdminPassword. Legacy v1 elements
-        // (ApiKey, OpenAIApiKey, WhisperModel, TranscribeModel, MaxTokens,
-        // and Claude model names) are ignored if encountered.
+        // CONFIGURATION DEFAULTS (v3 - LiteLLM API-key connector)
+        //
+        // Install scripts own the server defaults: LiteLlmBaseUrl, models,
+        // temperature, token limits, and bulk export limits. Users provide
+        // only their own LiteLLM API key in Settings; it is stored in their
+        // AppData config and is never written to the shared server config.
         // ============================================================
 
-        public const string DefaultModel = "gpt-5.5";
-        public const string DefaultVoiceModel = "gpt-realtime-1.5";
-        public const string DefaultCodexAuthPath = @"C:\ProgramData\OutlookAI\auth.json";
+        public const string DefaultLiteLlmBaseUrl = "https://litellm.example.com/v1";
+        public const string DefaultModel = "gpt-4.1-mini";
+        public const string DefaultVoiceModel = "";
         public const string DefaultReasoningEffort = "None";
+        public const double DefaultTemperature = 0.2;
+        public const int DefaultMaxTokens = 4096;
         public const bool DefaultWriteToolsEnabled = true;
         public const int DefaultMaxBulkExportRows = 2000;
+
         private const int MinBulkExportRows = 1;
-        // Shared with the interactive export path so the two Excel exporters
-        // can never produce workbooks of differing maximum size (#12.1).
         private const int MaxBulkExportRowsCeiling = Services.Tools.BulkExportRowCap.Max;
+        private const int MinMaxTokens = 1;
+        private const int MaxMaxTokens = 200000;
 
         public static string AdminPassword { get; set; } = "admin";
-        public static string CodexAuthPath { get; set; } = DefaultCodexAuthPath;
+        public static string LiteLlmBaseUrl { get; set; } = DefaultLiteLlmBaseUrl;
+        public static string LiteLlmApiKey { get; set; } = "";
         public static string Model { get; set; } = DefaultModel;
         public static string VoiceModel { get; set; } = DefaultVoiceModel;
-
-        /// <summary>
-        /// Default reasoning effort sent to the Codex backend on each turn.
-        /// One of <see cref="AvailableReasoningEfforts"/>. "None" means omit the
-        /// reasoning block entirely. Per-turn overrides via
-        /// <c>ConversationContext.ReasoningEffortOverride</c>.
-        /// </summary>
         public static string ReasoningEffort { get; set; } = DefaultReasoningEffort;
-
-        /// <summary>
-        /// Master switch for the four safe-write Outlook tools (create_draft,
-        /// mark_as_read, flag_message, set_category). When false, the tool
-        /// catalog sent to the model only includes the read tools. When true,
-        /// the per-tool set <see cref="EnabledWriteTools"/> determines which
-        /// individual writes are surfaced.
-        /// </summary>
+        public static double Temperature { get; set; } = DefaultTemperature;
+        public static int MaxTokens { get; set; } = DefaultMaxTokens;
         public static bool WriteToolsEnabled { get; set; } = DefaultWriteToolsEnabled;
-
-        /// <summary>
-        /// Hard ceiling on rows collected by outlook_export_search_results.
-        /// Server-authoritative (global config only); not user-overridable.
-        /// Bounds runtime/memory on large mailboxes. Clamped to
-        /// [MinBulkExportRows, MaxBulkExportRowsCeiling] on load.
-        /// </summary>
         public static int MaxBulkExportRows { get; set; } = DefaultMaxBulkExportRows;
 
-        /// <summary>
-        /// Full set of write-tool names supported by Phase 2. Used both as
-        /// the SettingsForm option list and as the default for
-        /// <see cref="EnabledWriteTools"/>.
-        /// </summary>
         public static readonly string[] AllWriteTools =
         {
             "outlook_create_draft",
@@ -71,30 +52,9 @@ namespace OutlookAI
             "outlook_set_category"
         };
 
-        /// <summary>
-        /// Currently-enabled subset of <see cref="AllWriteTools"/>. Both
-        /// <see cref="OutlookToolHost"/> (tool registration) and
-        /// <see cref="Services.Tools.ToolCatalogSchema"/> (request-time
-        /// catalog) consult this set when WriteToolsEnabled=true.
-        /// </summary>
         public static HashSet<string> EnabledWriteTools { get; set; } =
             new HashSet<string>(AllWriteTools, StringComparer.Ordinal);
 
-        public static readonly string[] AvailableModels =
-        {
-            "gpt-5.5",
-            "gpt-5.5-pro",
-            "gpt-5.4",
-            "gpt-5.4-mini",
-            "gpt-4.1-mini",
-            "gpt-4.1-nano",
-            "gpt-5.3-codex"
-        };
-
-        // Authoritative source: OpenAI docs (Reasoning models guide) +
-        // confirmed by Codex backend error messages on production traffic:
-        //   "Supported values are model-dependent and can include
-        //    'none', 'minimal', 'low', 'medium', 'high', and 'xhigh'."
         public static readonly string[] AvailableReasoningEfforts =
         {
             "None",
@@ -105,58 +65,37 @@ namespace OutlookAI
             "XHigh"
         };
 
-        /// <summary>
-        /// Returns the reasoning-effort options that are valid for a given
-        /// model. Per-model overrides because not every model supports every
-        /// value:
-        ///   - gpt-5.5 family rejects 'minimal' (confirmed via backend error).
-        ///   - gpt-4.1-mini / nano are non-reasoning - only 'none' is valid.
-        ///   - gpt-5.4 family supports the full set including 'minimal'.
-        /// Wire format is the lowercased value; see
-        /// <c>CodexChatService.BuildRunTurnRequest</c>.
-        /// </summary>
         public static string[] ReasoningEffortsForModel(string model)
         {
-            if (model == "gpt-4.1-mini" || model == "gpt-4.1-nano")
-            {
-                return new[] { "None" };
-            }
-            if (model == "gpt-5.5" || model == "gpt-5.5-pro" || model == "gpt-5.3-codex")
-            {
-                // 'Minimal' is unsupported on gpt-5.5 per the backend error
-                // message: "'minimal' is not supported with the 'gpt-5.5' model.
-                // Supported values are: 'none', 'low', 'medium', 'high', and
-                // 'xhigh'."
-                return new[] { "None", "Low", "Medium", "High", "XHigh" };
-            }
-            // gpt-5.4, gpt-5.4-mini, and any future model default to the
-            // full enum.
             return AvailableReasoningEfforts;
         }
 
-        // ============================================================
-        // END CONFIGURATION
-        // ============================================================
+        public static bool IsUsingPlaceholderLiteLlmEndpoint()
+        {
+            return string.Equals(
+                NormalizeBaseUrl(LiteLlmBaseUrl),
+                NormalizeBaseUrl(DefaultLiteLlmBaseUrl),
+                StringComparison.OrdinalIgnoreCase);
+        }
 
-        // Global config: admin-controlled, applies to all users on this server
-        private static readonly string GlobalConfigFilePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            "OutlookAI",
-            "config.xml"
-        );
+        public static void EnsureLiteLlmServerConfigured()
+        {
+            if (IsUsingPlaceholderLiteLlmEndpoint())
+            {
+                throw new InvalidOperationException(
+                    "Серверная конфигурация LiteLLM не установлена. "
+                    + "Переустановите OutlookAI через installer и укажите LiteLLM base URL, например http://localhost:4000/v1, и модель, например local-model.");
+            }
+        }
 
-        // Per-user config: may override AdminPassword only
+        private static readonly string[] GlobalConfigFilePaths = BuildGlobalConfigFilePaths();
+
         private static readonly string UserConfigFilePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "OutlookAI",
             "config.xml"
         );
 
-        // Shared admin defaults: writable by Admins (RDS scenario), readable by
-        // all users on the box. Loaded between the server-authoritative global
-        // config and the per-user AppData override. SettingsForm-driven Save
-        // writes here AND to AppData so the admin's preference becomes the
-        // default for every user on the server.
         private static readonly string SharedConfigFilePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "OutlookAI",
@@ -170,40 +109,82 @@ namespace OutlookAI
 
         public static void LoadConfig()
         {
-            LoadConfigFromPaths(GlobalConfigFilePath, SharedConfigFilePath, UserConfigFilePath);
+            LoadConfigFromPaths(GlobalConfigFilePaths, SharedConfigFilePath, UserConfigFilePath);
         }
 
-        // Test seam: explicit paths so we don't touch Program Files /
-        // ProgramData / AppData during unit tests.
         public static void LoadConfigFromPaths(string globalConfigPath, string sharedConfigPath, string userConfigPath)
         {
-            ResetDefaults();
-            LoadFromFile(globalConfigPath, allowServerFields: true);
-            LoadFromFile(sharedConfigPath, allowServerFields: false);
-            LoadFromFile(userConfigPath, allowServerFields: false);
+            LoadConfigFromPaths(new[] { globalConfigPath }, sharedConfigPath, userConfigPath);
         }
 
-        // Back-compat overload for existing tests that don't care about the
-        // shared-defaults layer. Equivalent to passing a non-existent shared
-        // path (LoadFromFile short-circuits on null/missing).
+        public static void LoadConfigFromPaths(IEnumerable<string> globalConfigPaths, string sharedConfigPath, string userConfigPath)
+        {
+            ResetDefaults();
+            foreach (var globalConfigPath in globalConfigPaths ?? Enumerable.Empty<string>())
+            {
+                LoadFromFile(globalConfigPath, allowServerFields: true, allowApiKey: false);
+            }
+            LoadFromFile(sharedConfigPath, allowServerFields: true, allowApiKey: false);
+            LoadFromFile(userConfigPath, allowServerFields: false, allowApiKey: true);
+            TraceEffectiveConfig(globalConfigPaths, sharedConfigPath, userConfigPath);
+        }
+
         public static void LoadConfigFromPaths(string globalConfigPath, string userConfigPath)
         {
             LoadConfigFromPaths(globalConfigPath, sharedConfigPath: null, userConfigPath);
         }
 
+        private static string[] BuildGlobalConfigFilePaths()
+        {
+            var paths = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            void AddConfigPath(string root)
+            {
+                if (string.IsNullOrWhiteSpace(root))
+                {
+                    return;
+                }
+
+                try
+                {
+                    var path = Path.Combine(root, "OutlookAI", "config.xml");
+                    if (seen.Add(path))
+                    {
+                        paths.Add(path);
+                    }
+                }
+                catch
+                {
+                    // Ignore malformed environment paths.
+                }
+            }
+
+            AddConfigPath(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86));
+            AddConfigPath(Environment.GetEnvironmentVariable("ProgramFiles(x86)"));
+            AddConfigPath(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
+            AddConfigPath(Environment.GetEnvironmentVariable("ProgramW6432"));
+            AddConfigPath(Environment.GetEnvironmentVariable("ProgramFiles"));
+
+            return paths.ToArray();
+        }
+
         public static void ResetDefaults()
         {
             AdminPassword = "admin";
-            CodexAuthPath = DefaultCodexAuthPath;
+            LiteLlmBaseUrl = DefaultLiteLlmBaseUrl;
+            LiteLlmApiKey = "";
             Model = DefaultModel;
             VoiceModel = DefaultVoiceModel;
             ReasoningEffort = DefaultReasoningEffort;
+            Temperature = DefaultTemperature;
+            MaxTokens = DefaultMaxTokens;
             WriteToolsEnabled = DefaultWriteToolsEnabled;
             MaxBulkExportRows = DefaultMaxBulkExportRows;
             EnabledWriteTools = new HashSet<string>(AllWriteTools, StringComparer.Ordinal);
         }
 
-        private static void LoadFromFile(string filePath, bool allowServerFields)
+        private static void LoadFromFile(string filePath, bool allowServerFields, bool allowApiKey)
         {
             try
             {
@@ -219,10 +200,6 @@ namespace OutlookAI
                     return;
                 }
 
-                // User-tunable fields (AdminPassword, ReasoningEffort,
-                // WriteToolsEnabled) are read from both global and per-user
-                // config. Per-user takes precedence because it's loaded
-                // second. Settings UI persists them via SaveConfig.
                 var adminPassword = root.Element("AdminPassword");
                 if (adminPassword != null && !string.IsNullOrEmpty(adminPassword.Value))
                 {
@@ -251,9 +228,6 @@ namespace OutlookAI
                 var enabledWriteTools = root.Element("EnabledWriteTools");
                 if (enabledWriteTools != null && !string.IsNullOrWhiteSpace(enabledWriteTools.Value))
                 {
-                    // Comma-separated list; intersect with the canonical set
-                    // so unknown tool names (typo / future tool removed) are
-                    // silently dropped instead of breaking the dispatcher.
                     var requested = enabledWriteTools.Value
                         .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
                         .Select(x => x.Trim());
@@ -263,15 +237,13 @@ namespace OutlookAI
                         StringComparer.Ordinal);
                 }
 
-                // Model is user-tunable in Phase 2 (Settings UI lets the admin
-                // pick from AvailableModels). Server provides the default, but
-                // per-user override beats it on load. Unknown model names fall
-                // back to whatever was already set.
-                var model = root.Element("Model");
-                if (model != null && !string.IsNullOrWhiteSpace(model.Value)
-                    && AvailableModels.Contains(model.Value))
+                if (allowApiKey)
                 {
-                    Model = model.Value;
+                    var apiKey = root.Element("LiteLlmApiKey") ?? root.Element("ApiKey");
+                    if (apiKey != null)
+                    {
+                        LiteLlmApiKey = apiKey.Value ?? "";
+                    }
                 }
 
                 if (!allowServerFields)
@@ -279,16 +251,42 @@ namespace OutlookAI
                     return;
                 }
 
-                var codexAuthPath = root.Element("CodexAuthPath");
-                if (codexAuthPath != null && !string.IsNullOrWhiteSpace(codexAuthPath.Value))
+                var baseUrl = root.Element("LiteLlmBaseUrl") ?? root.Element("BaseUrl");
+                if (baseUrl != null && !string.IsNullOrWhiteSpace(baseUrl.Value))
                 {
-                    CodexAuthPath = codexAuthPath.Value;
+                    LiteLlmBaseUrl = NormalizeBaseUrl(baseUrl.Value);
                 }
 
-                var voiceModel = root.Element("VoiceModel");
-                if (voiceModel != null && !string.IsNullOrWhiteSpace(voiceModel.Value))
+                var model = root.Element("Model") ?? root.Element("LiteLlmModel");
+                if (model != null && !string.IsNullOrWhiteSpace(model.Value))
                 {
-                    VoiceModel = voiceModel.Value;
+                    Model = model.Value.Trim();
+                }
+
+                var voiceModel = root.Element("VoiceModel") ?? root.Element("LiteLlmVoiceModel");
+                if (voiceModel != null)
+                {
+                    VoiceModel = voiceModel.Value.Trim();
+                }
+
+                var temperature = root.Element("Temperature");
+                if (temperature != null && double.TryParse(
+                    temperature.Value,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var t))
+                {
+                    if (t < 0) t = 0;
+                    if (t > 2) t = 2;
+                    Temperature = t;
+                }
+
+                var maxTokens = root.Element("MaxTokens");
+                if (maxTokens != null && int.TryParse(maxTokens.Value, out var mt))
+                {
+                    if (mt < MinMaxTokens) mt = MinMaxTokens;
+                    if (mt > MaxMaxTokens) mt = MaxMaxTokens;
+                    MaxTokens = mt;
                 }
 
                 var maxBulkExportRows = root.Element("MaxBulkExportRows");
@@ -305,16 +303,43 @@ namespace OutlookAI
             }
         }
 
+        private static void TraceEffectiveConfig(IEnumerable<string> globalConfigPaths, string sharedConfigPath, string userConfigPath)
+        {
+            try
+            {
+                var machinePaths = string.Join("; ",
+                    (globalConfigPaths ?? Enumerable.Empty<string>())
+                        .Where(path => !string.IsNullOrWhiteSpace(path))
+                        .Select(path => path + (File.Exists(path) ? " [found]" : " [missing]")));
+                var sharedState = string.IsNullOrWhiteSpace(sharedConfigPath)
+                    ? "<none>"
+                    : sharedConfigPath + (File.Exists(sharedConfigPath) ? " [found]" : " [missing]");
+                var userState = string.IsNullOrWhiteSpace(userConfigPath)
+                    ? "<none>"
+                    : userConfigPath + (File.Exists(userConfigPath) ? " [found]" : " [missing]");
+
+                TraceLog.Write(
+                    "Config loaded. MachinePaths=" + machinePaths
+                    + "; SharedPath=" + sharedState
+                    + "; UserPath=" + userState
+                    + "; LiteLlmBaseUrl=" + NormalizeBaseUrl(LiteLlmBaseUrl)
+                    + "; Model=" + Model
+                    + "; VoiceModel=" + (string.IsNullOrWhiteSpace(VoiceModel) ? "<disabled>" : VoiceModel)
+                    + "; ApiKeyConfigured=" + (!string.IsNullOrWhiteSpace(LiteLlmApiKey)),
+                    "Config");
+            }
+            catch
+            {
+                // Diagnostics must not affect startup.
+            }
+        }
+
         public static void SaveConfig()
         {
-            // Per-user config persists AdminPassword + the user-tunable AI
-            // behavior fields. Shared config persists the same fields so
-            // admins on an RDS host can set server-wide defaults that
-            // propagate to every user.
-            var doc = new XDocument(
+            var userDoc = new XDocument(
                 new XElement("Config",
                     new XElement("AdminPassword", AdminPassword),
-                    new XElement("Model", Model),
+                    new XElement("LiteLlmApiKey", LiteLlmApiKey ?? ""),
                     new XElement("ReasoningEffort", ReasoningEffort),
                     new XElement("WriteToolsEnabled", WriteToolsEnabled),
                     new XElement("EnabledWriteTools",
@@ -322,16 +347,41 @@ namespace OutlookAI
                 )
             );
 
-            // 1) Per-user override (always attempted; failures silently
-            //    swallowed so a read-only AppData doesn't block the workflow).
-            TrySaveTo(UserConfigFilePath, doc);
+            TrySaveTo(UserConfigFilePath, userDoc);
+        }
 
-            // 2) Shared admin defaults (only succeeds if running as
-            //    Administrator on the RDS host - ProgramData ACL by default
-            //    is Admin-write, User-read. Regular users silently no-op
-            //    here, which is the intended behavior: a non-admin can't
-            //    change server-wide defaults).
-            TrySaveTo(SharedConfigFilePath, doc);
+        public static string NormalizeBaseUrl(string raw)
+        {
+            var value = (raw ?? "").Trim();
+            while (value.EndsWith("/", StringComparison.Ordinal))
+            {
+                value = value.Substring(0, value.Length - 1);
+            }
+            if (string.IsNullOrEmpty(value))
+            {
+                return DefaultLiteLlmBaseUrl;
+            }
+
+            if (value.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            {
+                value = value.Substring(0, value.Length - "/chat/completions".Length);
+            }
+            else if (value.EndsWith("/audio/transcriptions", StringComparison.OrdinalIgnoreCase))
+            {
+                value = value.Substring(0, value.Length - "/audio/transcriptions".Length);
+            }
+
+            while (value.EndsWith("/", StringComparison.Ordinal))
+            {
+                value = value.Substring(0, value.Length - 1);
+            }
+
+            if (!value.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+            {
+                value += "/v1";
+            }
+
+            return value;
         }
 
         private static void TrySaveTo(string filePath, XDocument doc)
@@ -347,11 +397,6 @@ namespace OutlookAI
             }
             catch (Exception ex)
             {
-                // Silently fail (read-only target, ACL denied, etc.) but record
-                // it so the maintainer can see the failure mode without breaking
-                // the user flow. Without this trace the admin gets a "Saved"
-                // indicator and only discovers the shared write didn't take when
-                // another user's login still shows defaults.
                 try
                 {
                     OutlookAI.Diagnostics.TraceLog.Write(

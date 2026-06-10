@@ -75,7 +75,7 @@ namespace OutlookAI.TaskPane.Chat
             }
             catch (OperationCanceledException)
             {
-                await PostErrorAsync(messageId, "cancelled", "Export cancelled.").ConfigureAwait(false);
+                await PostErrorAsync(messageId, "cancelled", "Экспорт отменён.").ConfigureAwait(false);
             }
             catch (ExportException ex)
             {

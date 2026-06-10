@@ -1,18 +1,16 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Installs OutlookAI v2 (ChatGPT OAuth) for all users on RDS / Terminal Server.
+    Installs OutlookAI v3 (LiteLLM connector) for all users on RDS / Terminal Server.
 
 .DESCRIPTION
-    Phase 1 v2 install:
+    v3 install:
       - Hardcoded install path: C:\Program Files\OutlookAI
       - Backs up any v1 config to C:\ProgramData\OutlookAI\Backups
-      - Writes a fresh v2 config when one is missing
-      - Creates the shared OAuth auth directory at C:\ProgramData\OutlookAI
-        with Authenticated Users: Modify (accepted shared-credential risk)
+      - Writes a fresh v3 config when one is missing
       - Renames any per-user v1 %APPDATA%\OutlookAI\config.xml to a backup
         so per-user files don't override the new server-authoritative
-        Model / CodexAuthPath settings
+        LiteLLM endpoint/model settings
 
     Run as Administrator.
 
@@ -25,7 +23,13 @@
 #>
 
 param(
-    [string]$SourcePath = "C:\OutlookAI"
+    [string]$SourcePath = "C:\OutlookAI",
+    [string]$LiteLlmBaseUrl = "https://litellm.example.com/v1",
+    [string]$LiteLlmModel = "gpt-4.1-mini",
+    [AllowEmptyString()][string]$LiteLlmVoiceModel = "",
+    [double]$Temperature = 0.2,
+    [int]$MaxTokens = 4096,
+    [int]$MaxBulkExportRows = 2000
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,8 +37,26 @@ $InstallPath        = "C:\Program Files\OutlookAI"
 $ProgramDataPath    = "C:\ProgramData\OutlookAI"
 $BackupRoot         = Join-Path $ProgramDataPath "Backups"
 $ConfigFilePath     = Join-Path $InstallPath "config.xml"
-$AuthFilePath       = Join-Path $ProgramDataPath "auth.json"
+$ProgramFilesX86    = ${env:ProgramFiles(x86)}
+$ConfigMirrorFilePath = if ([string]::IsNullOrWhiteSpace($ProgramFilesX86)) { "" } else { Join-Path $ProgramFilesX86 "OutlookAI\config.xml" }
 $Timestamp          = Get-Date -Format "yyyyMMdd-HHmmss"
+
+function Normalize-OptionalValue {
+    param([AllowEmptyString()][string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return ""
+    }
+
+    $trimmed = $Value.Trim()
+    if ($trimmed -in @("null", "none", "no", "off", "-")) {
+        return ""
+    }
+
+    return $trimmed
+}
+
+$LiteLlmVoiceModel = Normalize-OptionalValue $LiteLlmVoiceModel
 
 # Cleans every known OutlookAI registration for one Windows user. Designed
 # to be called once per user hive (offline-loaded for non-logged-in users,
@@ -176,7 +198,7 @@ function Clean-StaleOutlookAIRegistrations {
 }
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  OutlookAI v2 Installer (ChatGPT OAuth)" -ForegroundColor Cyan
+Write-Host "  OutlookAI v3 Installer (LiteLLM)" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -208,7 +230,7 @@ if (!(Test-Path $appFilesDir)) {
 
 Write-Host "Source : $SourcePath"     -ForegroundColor Gray
 Write-Host "Target : $InstallPath"    -ForegroundColor Gray
-Write-Host "Auth   : $ProgramDataPath" -ForegroundColor Gray
+Write-Host "Config : $ConfigFilePath" -ForegroundColor Gray
 Write-Host ""
 
 # --- 0. Clean up any stale OutlookAI registrations ----------------------
@@ -327,13 +349,30 @@ Copy-Item -Path $appFilesDir -Destination $InstallPath -Recurse -Force
 $latestVersionDir = Get-ChildItem -Path (Join-Path $InstallPath "Application Files") -Directory |
     Sort-Object Name -Descending | Select-Object -First 1
 if ($latestVersionDir) {
-    Get-ChildItem -Path $latestVersionDir.FullName -Filter "*.deploy" | ForEach-Object {
-        $newName = $_.Name -replace '\.deploy$', ''
-        Copy-Item -Path $_.FullName -Destination (Join-Path $InstallPath $newName) -Force
+    Get-ChildItem -Path $latestVersionDir.FullName -Filter "*.deploy" -Recurse | ForEach-Object {
+        $relativePath = $_.FullName.Substring($latestVersionDir.FullName.Length).TrimStart('\')
+        $targetRelativePath = $relativePath -replace '\.deploy$', ''
+        $targetPath = Join-Path $InstallPath $targetRelativePath
+        $targetDir = Split-Path -Parent $targetPath
+        if (!(Test-Path $targetDir)) {
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        }
+        Copy-Item -Path $_.FullName -Destination $targetPath -Force
     }
     $manifestFile = Join-Path $latestVersionDir.FullName "OutlookAI.dll.manifest"
     if (Test-Path $manifestFile) {
         Copy-Item -Path $manifestFile -Destination $InstallPath -Force
+    }
+    foreach ($loader in @(
+        "runtimes\win-x86\native\WebView2Loader.dll",
+        "runtimes\win-x64\native\WebView2Loader.dll"
+    )) {
+        $loaderPath = Join-Path $InstallPath $loader
+        if (Test-Path $loaderPath) {
+            Write-Host "  Staged $loader" -ForegroundColor Gray
+        } else {
+            Write-Host "  WARN: missing $loader" -ForegroundColor Yellow
+        }
     }
 }
 Write-Host "  Done." -ForegroundColor Green
@@ -343,11 +382,12 @@ Write-Host "[4/10] Unblocking files..." -ForegroundColor Yellow
 Get-ChildItem -Path $InstallPath -Recurse | Unblock-File -ErrorAction SilentlyContinue
 Write-Host "  Done." -ForegroundColor Green
 
-# --- 5. Write v2 config --------------------------------------------------
-Write-Host "[5/10] Writing v2 config.xml..." -ForegroundColor Yellow
+# --- 5. Write v3 config --------------------------------------------------
+Write-Host "[5/10] Writing v3 config.xml..." -ForegroundColor Yellow
 
-# Carry over only the AdminPassword from any v1 file (everything else is
-# server-authoritative under v2).
+# Carry over only the AdminPassword from any previous file. LiteLLM
+# connection defaults are server-authoritative and are supplied by this
+# installer invocation. User API keys are intentionally not written here.
 $preservedAdminPassword = "admin"
 $latestBackup = Get-ChildItem -Path $BackupRoot -Filter "config.xml.v1.backup.*" -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
@@ -366,17 +406,50 @@ if ($latestBackup) {
     }
 }
 
-$v2Config = @"
+$xmlAdminPassword = [System.Security.SecurityElement]::Escape($preservedAdminPassword)
+$xmlLiteLlmBaseUrl = [System.Security.SecurityElement]::Escape($LiteLlmBaseUrl)
+$xmlLiteLlmModel = [System.Security.SecurityElement]::Escape($LiteLlmModel)
+$xmlLiteLlmVoiceModel = [System.Security.SecurityElement]::Escape($LiteLlmVoiceModel)
+
+$v3Config = @"
 <Config>
-  <AdminPassword>$preservedAdminPassword</AdminPassword>
-  <CodexAuthPath>C:\ProgramData\OutlookAI\auth.json</CodexAuthPath>
-  <Model>gpt-5.5</Model>
-  <VoiceModel>gpt-realtime-1.5</VoiceModel>
+  <AdminPassword>$xmlAdminPassword</AdminPassword>
+  <LiteLlmBaseUrl>$xmlLiteLlmBaseUrl</LiteLlmBaseUrl>
+  <Model>$xmlLiteLlmModel</Model>
+  <VoiceModel>$xmlLiteLlmVoiceModel</VoiceModel>
+  <Temperature>$Temperature</Temperature>
+  <MaxTokens>$MaxTokens</MaxTokens>
+  <MaxBulkExportRows>$MaxBulkExportRows</MaxBulkExportRows>
 </Config>
 "@
 
-Set-Content -Path $ConfigFilePath -Value $v2Config -Encoding UTF8
+Set-Content -Path $ConfigFilePath -Value $v3Config -Encoding UTF8
 Write-Host "  Wrote $ConfigFilePath" -ForegroundColor Gray
+
+# 32-bit Outlook runs the add-in in a 32-bit .NET process where
+# Environment.SpecialFolder.ProgramFiles resolves to Program Files (x86).
+# Keep a tiny config mirror there so that bitness cannot make the add-in
+# fall back to compiled LiteLLM defaults.
+if (-not [string]::IsNullOrWhiteSpace($ConfigMirrorFilePath) -and
+    -not [string]::Equals($ConfigMirrorFilePath, $ConfigFilePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+    $mirrorDir = Split-Path -Parent $ConfigMirrorFilePath
+    if (!(Test-Path $mirrorDir)) {
+        New-Item -ItemType Directory -Path $mirrorDir -Force | Out-Null
+    }
+    Set-Content -Path $ConfigMirrorFilePath -Value $v3Config -Encoding UTF8
+    Write-Host "  Wrote $ConfigMirrorFilePath" -ForegroundColor Gray
+}
+
+$sharedConfigFilePath = Join-Path $ProgramDataPath "config.xml"
+if (!(Test-Path $ProgramDataPath)) {
+    New-Item -ItemType Directory -Path $ProgramDataPath -Force | Out-Null
+}
+Set-Content -Path $sharedConfigFilePath -Value $v3Config -Encoding UTF8
+Write-Host "  Wrote $sharedConfigFilePath" -ForegroundColor Gray
+Write-Host "  Effective server config:" -ForegroundColor Gray
+Write-Host "    Base URL : $LiteLlmBaseUrl" -ForegroundColor Gray
+Write-Host "    Model    : $LiteLlmModel" -ForegroundColor Gray
+Write-Host "    Voice    : $LiteLlmVoiceModel" -ForegroundColor Gray
 # v2.1+ release packages ship a version.json alongside Install-OutlookAI.ps1.
 # Copy it into the install dir so the in-app updater knows what is installed.
 $stagedVersionJson = Join-Path $SourcePath "version.json"
@@ -392,17 +465,13 @@ if (Test-Path $stagedVersionJson) {
 }
 Write-Host "  Done." -ForegroundColor Green
 
-# --- 6. Provision shared OAuth auth folder + ACL -------------------------
-Write-Host "[6/10] Provisioning shared OAuth auth folder..." -ForegroundColor Yellow
+# --- 6. Provision ProgramData folder -------------------------------------
+Write-Host "[6/10] Provisioning ProgramData folder..." -ForegroundColor Yellow
 if (!(Test-Path $ProgramDataPath)) {
     New-Item -ItemType Directory -Path $ProgramDataPath -Force | Out-Null
 }
-
-# Shared per-server OAuth: any signed-in user on this server can read/write
-# auth.json. This is the accepted Phase 1 trade-off; if trust changes,
-# rotate the credential via Settings -> Sign Out + Sign In.
-& icacls.exe $ProgramDataPath /grant "Authenticated Users:(OI)(CI)M" /T | Out-Null
-Write-Host "  Granted Authenticated Users: Modify on $ProgramDataPath" -ForegroundColor Gray
+& icacls.exe $ProgramDataPath /grant "Authenticated Users:(OI)(CI)RX" /T | Out-Null
+Write-Host "  Granted Authenticated Users: Read/Execute on $ProgramDataPath" -ForegroundColor Gray
 Write-Host "  Done." -ForegroundColor Green
 
 # --- 7. Per-user v1 AppData cleanup --------------------------------------
@@ -415,7 +484,7 @@ foreach ($profile in $userProfiles) {
     if (Test-Path $userConfig) {
         try {
             [xml]$xml = Get-Content -Path $userConfig -Raw
-            if ($xml.Config -and -not $xml.Config.CodexAuthPath) {
+            if ($xml.Config -and -not $xml.Config.LiteLlmBaseUrl) {
                 $renamed++
                 $renamedTarget = "$userConfig.v1.backup.$Timestamp"
                 Move-Item -Path $userConfig -Destination $renamedTarget -Force
@@ -438,26 +507,42 @@ Write-Host ("  Done ({0} per-user v1 configs renamed)." -f $renamed) -Foreground
 # WebView2 runtime" panel - the rest of the add-in (Actions tab, voice,
 # Variants tab) keeps working.
 Write-Host "[8/10] Ensuring Microsoft Edge WebView2 Runtime present..." -ForegroundColor Yellow
-$wv2KeyA = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-$wv2KeyB = "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-$wv2Installed = $false
-foreach ($k in @($wv2KeyA, $wv2KeyB)) {
-    if (Test-Path $k) {
-        $pv = (Get-ItemProperty $k -ErrorAction SilentlyContinue).pv
-        if (-not [string]::IsNullOrWhiteSpace($pv)) {
-            $wv2Installed = $true
-            Write-Host "  WebView2 Runtime detected (version $pv)." -ForegroundColor Gray
-            break
+function Test-WebView2RuntimeInstalled {
+    $runtimeKeys = @(
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+    )
+
+    foreach ($key in $runtimeKeys) {
+        if (Test-Path $key) {
+            $pv = (Get-ItemProperty $key -ErrorAction SilentlyContinue).pv
+            if (-not [string]::IsNullOrWhiteSpace($pv)) {
+                return $pv
+            }
         }
     }
+
+    return $null
 }
-if (-not $wv2Installed) {
+
+$wv2Version = Test-WebView2RuntimeInstalled
+if ($wv2Version) {
+    Write-Host "  WebView2 Runtime detected (version $wv2Version)." -ForegroundColor Gray
+} else {
     $bootstrap = Join-Path $SourcePath "MicrosoftEdgeWebView2Setup.exe"
     if (Test-Path $bootstrap) {
         Write-Host "  Installing WebView2 Runtime (silent)..." -ForegroundColor Gray
         try {
-            Start-Process -FilePath $bootstrap -ArgumentList "/silent","/install" -Wait
-            Write-Host "  WebView2 Runtime installed." -ForegroundColor Gray
+            $wv2Process = Start-Process -FilePath $bootstrap -ArgumentList "/silent","/install" -Wait -PassThru
+            Write-Host "  WebView2 bootstrapper exit code: $($wv2Process.ExitCode)" -ForegroundColor Gray
+            Start-Sleep -Seconds 3
+            $wv2Version = Test-WebView2RuntimeInstalled
+            if ($wv2Version) {
+                Write-Host "  WebView2 Runtime installed (version $wv2Version)." -ForegroundColor Gray
+            } else {
+                Write-Host "  WARN: WebView2 bootstrapper finished, but runtime was not detected." -ForegroundColor Yellow
+                Write-Host "  Chat tab will show the runtime-missing fallback panel until WebView2 is installed manually." -ForegroundColor Yellow
+            }
         } catch {
             Write-Host "  WARN: WebView2 bootstrapper failed: $_" -ForegroundColor Yellow
             Write-Host "  Chat tab will show the runtime-missing fallback panel." -ForegroundColor Yellow
@@ -551,16 +636,15 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Installation Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "ChatGPT OAuth shared on this server:" -ForegroundColor Yellow
-Write-Host "  $AuthFilePath" -ForegroundColor Yellow
-Write-Host "  Any signed-in user can read/write this file." -ForegroundColor Yellow
-Write-Host "  Only deploy to RDS servers where every interactive user is" -ForegroundColor Yellow
-Write-Host "  trusted with the OpenAI / ChatGPT account that signs in." -ForegroundColor Yellow
-Write-Host "  To rotate: have an admin open Outlook, click Settings, Sign Out," -ForegroundColor Yellow
-Write-Host "  then Sign In again. See Deploy\\README.txt." -ForegroundColor Yellow
+Write-Host "LiteLLM connector defaults:" -ForegroundColor Yellow
+Write-Host "  Base URL : $LiteLlmBaseUrl" -ForegroundColor Yellow
+Write-Host "  Model    : $LiteLlmModel" -ForegroundColor Yellow
+Write-Host "  Voice    : $LiteLlmVoiceModel" -ForegroundColor Yellow
+Write-Host "  API keys are not installed globally. Each user enters their own" -ForegroundColor Yellow
+Write-Host "  LiteLLM API key in OutlookAI Settings." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Users will see 'AI Assistant' on the compose-window ribbon." -ForegroundColor White
-Write-Host "First action prompts for ChatGPT sign-in via the local browser." -ForegroundColor White
+Write-Host "First action prompts the user to enter their LiteLLM API key." -ForegroundColor White
 Write-Host ""
 Write-Host "If add-in doesn't auto-load for existing users:" -ForegroundColor Yellow
 Write-Host "  - Have user run Enable-OutlookAI-User.ps1, OR"             -ForegroundColor Gray

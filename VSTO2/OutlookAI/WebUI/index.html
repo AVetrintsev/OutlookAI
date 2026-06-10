@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OutlookAI Chat</title>
+  <title>Чат OutlookAI</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="theme-light">
   <div id="app">
     <div id="contextStrip" class="context-strip">
-      <div class="context-line context-subject" id="ctxSubject">No subject</div>
+      <div class="context-line context-subject" id="ctxSubject">Без темы</div>
       <div class="context-line context-recipients" id="ctxRecipients"></div>
       <div class="context-line context-thread" id="ctxThread"></div>
     </div>
@@ -24,20 +24,20 @@
       <textarea id="composerInput"
                 class="composer-input"
                 rows="2"
-                placeholder="Ask about this email, or this thread..."
-                aria-label="Chat input"></textarea>
+                placeholder="Спросите об этом письме или переписке..."
+                aria-label="Поле ввода чата"></textarea>
       <div class="composer-controls">
         <select id="reasoningSelect"
                 class="reasoning-select"
-                aria-label="Reasoning effort">
+                aria-label="Уровень рассуждений">
           <!-- Populated by C# via outlookai.setReasoningOptions() once
                the WebView is ready and Config.Model is known. -->
-          <option value="">(default)</option>
+          <option value="">(по умолчанию)</option>
         </select>
-        <button id="btnSend" class="btn btn-primary" type="button">Send</button>
-        <button id="btnStop" class="btn btn-secondary" type="button" hidden>Stop</button>
-        <button id="btnClear" class="btn btn-ghost" type="button" title="Clear conversation">Clear</button>
-        <button id="btnCopy" class="btn btn-ghost" type="button" title="Copy conversation to clipboard">Copy</button>
+        <button id="btnSend" class="btn btn-primary" type="button">Отправить</button>
+        <button id="btnStop" class="btn btn-secondary" type="button" hidden>Стоп</button>
+        <button id="btnClear" class="btn btn-ghost" type="button" title="Очистить диалог">Очистить</button>
+        <button id="btnCopy" class="btn btn-ghost" type="button" title="Скопировать диалог в буфер обмена">Копировать</button>
       </div>
     </div>
   </div>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -155,7 +155,7 @@ namespace OutlookAI.TaskPane
             // visible while a turn is in flight.
             _btnCancel = new Button
             {
-                Text = "Cancel",
+                Text = "Отмена",
                 Visible = false,
                 Width = 70,
                 Height = 22,
@@ -185,14 +185,14 @@ namespace OutlookAI.TaskPane
             panelResult.Location = new Point(panelResult.Location.X, panelResult.Location.Y + 60);
         }
 
-        private CodexChatService ChatService
+        private LiteLlmChatService ChatService
             => Globals.ThisAddIn != null ? Globals.ThisAddIn.ChatService : null;
 
-        private RealtimeVoiceService VoiceService
+        private LiteLlmVoiceService VoiceService
             => Globals.ThisAddIn != null ? Globals.ThisAddIn.VoiceService : null;
 
-        private CodexAuthService AuthService
-            => Globals.ThisAddIn != null ? Globals.ThisAddIn.AuthService : null;
+        private LiteLlmCredentialService CredentialService
+            => Globals.ThisAddIn != null ? Globals.ThisAddIn.CredentialService : null;
 
         /// <summary>
         /// Call this when the task pane becomes visible for a new email.
@@ -207,8 +207,8 @@ namespace OutlookAI.TaskPane
         }
 
         // -------------------------------------------------------------------
-        // Voice capture (mic) — streams raw 16-kHz / 16-bit / mono PCM into
-        // a MemoryStream, then hands that stream to RealtimeVoiceService.
+        // Voice capture (mic) вЂ” streams raw 16-kHz / 16-bit / mono PCM into
+        // a MemoryStream, then hands that stream to LiteLlmVoiceService.
         // No more on-disk WAV; no more REST POST to /v1/audio/transcriptions.
         // -------------------------------------------------------------------
 
@@ -222,7 +222,7 @@ namespace OutlookAI.TaskPane
 
             try
             {
-                if (!RequireSignedIn("Sign in to OutlookAI before using voice input."))
+                if (!RequireSignedIn("Configure your LiteLLM API key before using voice input."))
                 {
                     return;
                 }
@@ -243,13 +243,13 @@ namespace OutlookAI.TaskPane
                 micButton.BackColor = Color.LightCoral;
                 micButton.ForeColor = Color.White;
                 micButton.Text = "...";
-                ShowStatus("Recording... Click again to stop and transcribe.", false);
+                ShowStatus("Идёт запись... Нажмите ещё раз, чтобы остановить и распознать речь.", false);
 
                 _waveIn.StartRecording();
             }
             catch (Exception ex)
             {
-                ShowStatus("Mic error: " + ex.Message, true);
+                ShowStatus("Ошибка микрофона: " + ex.Message, true);
                 System.Diagnostics.Debug.WriteLine("Recording error: " + ex);
                 CleanupRecording();
             }
@@ -303,18 +303,18 @@ namespace OutlookAI.TaskPane
                     micButton.Text = "\u25CF";
                 }
 
-                ShowStatus("Transcribing...", false);
+                ShowStatus("Распознаю речь...", false);
 
                 if (pcmBytes.Length < 32000) // ~1s of 16-kHz mono PCM
                 {
-                    ShowStatus("Recording too short. Please try again.", true);
+                    ShowStatus("Запись слишком короткая. Попробуйте ещё раз.", true);
                     return;
                 }
 
                 var voice = VoiceService;
                 if (voice == null)
                 {
-                    ShowStatus("Voice service unavailable. Restart Outlook.", true);
+                    ShowStatus("Голосовой сервис недоступен. Перезапустите Outlook.", true);
                     return;
                 }
 
@@ -332,18 +332,18 @@ namespace OutlookAI.TaskPane
                         {
                             textBox.Text = transcription;
                         }
-                        ShowStatus("Transcription complete!", false);
+                        ShowStatus("Распознавание завершено.", false);
                     });
                 }
                 else
                 {
-                    InvokeOnUI(() => ShowStatus("No speech detected. Please try again.", true));
+                    InvokeOnUI(() => ShowStatus("Речь не распознана. Попробуйте ещё раз.", true));
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("Transcription error: " + ex);
-                InvokeOnUI(() => ShowStatus("Transcription error: " + ex.Message, true));
+                InvokeOnUI(() => ShowStatus("Ошибка распознавания: " + ex.Message, true));
             }
             finally
             {
@@ -382,50 +382,50 @@ namespace OutlookAI.TaskPane
         }
 
         // -------------------------------------------------------------------
-        // Text actions — all routed through CodexChatService -> Codex backend.
+        // Text actions - all routed through LiteLlmChatService.
         // -------------------------------------------------------------------
 
         private async void btnProofread_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Proofread);
+            await ProcessAction(LiteLlmChatService.ActionType.Proofread);
         }
 
         private async void btnRevise_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Revise);
+            await ProcessAction(LiteLlmChatService.ActionType.Revise);
         }
 
         private async void btnShorten_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Shorten);
+            await ProcessAction(LiteLlmChatService.ActionType.Shorten);
         }
 
         private async void btnLengthen_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Lengthen);
+            await ProcessAction(LiteLlmChatService.ActionType.Lengthen);
         }
 
         private async void btnFormal_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Formal);
+            await ProcessAction(LiteLlmChatService.ActionType.Formal);
         }
 
         private async void btnFriendly_Click(object sender, EventArgs e)
         {
-            await ProcessAction(CodexChatService.ActionType.Friendly);
+            await ProcessAction(LiteLlmChatService.ActionType.Friendly);
         }
 
         private async void btnDraft_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrWhiteSpace(txtDraftPrompt.Text))
             {
-                ShowStatus("Please enter instructions for the email you want to draft.", true);
+                ShowStatus("Введите инструкции для письма, которое нужно создать.", true);
                 return;
             }
-            await ProcessAction(CodexChatService.ActionType.Draft, txtDraftPrompt.Text);
+            await ProcessAction(LiteLlmChatService.ActionType.Draft, txtDraftPrompt.Text);
         }
 
-        private async Task ProcessAction(CodexChatService.ActionType action, string prompt = "")
+        private async Task ProcessAction(LiteLlmChatService.ActionType action, string prompt = "")
         {
             TraceLog.Write(">> ProcessAction " + action, "AITaskPane");
             if (_isRecording)
@@ -433,7 +433,7 @@ namespace OutlookAI.TaskPane
                 CleanupRecording();
             }
 
-            if (!RequireSignedIn("Sign in to OutlookAI before using AI actions."))
+            if (!RequireSignedIn("Настройте ключ API LiteLLM перед использованием AI-действий."))
             {
                 return;
             }
@@ -441,20 +441,20 @@ namespace OutlookAI.TaskPane
             var chat = ChatService;
             if (chat == null)
             {
-                ShowStatus("Chat service unavailable. Restart Outlook.", true);
+                ShowStatus("Чат-сервис недоступен. Перезапустите Outlook.", true);
                 return;
             }
 
             string emailContent = GetEmailBody();
-            if (action != CodexChatService.ActionType.Draft && string.IsNullOrWhiteSpace(emailContent))
+            if (action != LiteLlmChatService.ActionType.Draft && string.IsNullOrWhiteSpace(emailContent))
             {
-                ShowStatus("No email content found. Please write something first.", true);
+                ShowStatus("Текст письма не найден. Сначала напишите что-нибудь.", true);
                 return;
             }
 
-            if (action == CodexChatService.ActionType.Draft && emailContent.Length > 4000)
+            if (action == LiteLlmChatService.ActionType.Draft && emailContent.Length > 4000)
             {
-                emailContent = emailContent.Substring(0, 4000) + "\n[... earlier messages truncated ...]";
+                emailContent = emailContent.Substring(0, 4000) + "\n[... предыдущие сообщения сокращены ...]";
             }
 
             // Build the per-turn context. The Phase 2 system prompt is the
@@ -466,11 +466,11 @@ namespace OutlookAI.TaskPane
                 + "not require any tools.";
             var ctx = new ConversationContext
             {
-                SystemInstructions = CodexChatService.GetSystemPrompt(action) + toolAddendum,
+                SystemInstructions = LiteLlmChatService.GetSystemPrompt(action) + toolAddendum,
                 IncludeWriteTools = Config.WriteToolsEnabled
             };
 
-            var userMessage = CodexChatService.BuildUserMessage(action, emailContent, prompt ?? "");
+            var userMessage = LiteLlmChatService.BuildUserMessage(action, emailContent, prompt ?? "");
             var toolHost = _toolHost ?? new OutlookToolHost(new NullSurface(), includeWriteTools: false);
             var sink = new ActionsTabSink(this);
 
@@ -484,7 +484,7 @@ namespace OutlookAI.TaskPane
             _activeCts = new CancellationTokenSource();
             SetUIEnabled(false);
             _btnCancel.Visible = true;
-            ShowStatus("Processing...", false);
+            ShowStatus("Обработка...", false);
 
             try
             {
@@ -500,16 +500,16 @@ namespace OutlookAI.TaskPane
                     switch (turnResult.StopReason)
                     {
                         case StopReason.Completed:
-                            verdict = "Done! Review the result below.";
+                            verdict = "Готово. Проверьте результат ниже.";
                             break;
                         case StopReason.Cancelled:
-                            verdict = "Stopped. Partial result shown.";
+                            verdict = "Остановлено. Показан частичный результат.";
                             break;
                         case StopReason.MaxRoundsReached:
-                            verdict = "Reached max tool rounds. Partial result shown.";
+                            verdict = "Достигнут лимит вызовов инструментов. Показан частичный результат.";
                             break;
                         case StopReason.Error:
-                            verdict = "Error: " + (turnResult.ErrorMessage ?? "unknown");
+                            verdict = "Ошибка: " + (turnResult.ErrorMessage ?? "неизвестно");
                             break;
                         default:
                             verdict = turnResult.StopReason.ToString();
@@ -524,7 +524,7 @@ namespace OutlookAI.TaskPane
             {
                 InvokeOnUI(() =>
                 {
-                    ShowStatus("Cancelled.", false);
+                    ShowStatus("Отменено.", false);
                     SetUIEnabled(true);
                     _btnCancel.Visible = false;
                 });
@@ -534,8 +534,8 @@ namespace OutlookAI.TaskPane
                 InvokeOnUI(() =>
                 {
                     string msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
-                    ShowStatus("Error - see details.", true);
-                    MessageBox.Show(msg, "OutlookAI Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    ShowStatus("Ошибка. Подробности в сообщении.", true);
+                    MessageBox.Show(msg, "Ошибка OutlookAI", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     panelResult.Visible = false;
                     SetUIEnabled(true);
                     _btnCancel.Visible = false;
@@ -636,7 +636,7 @@ namespace OutlookAI.TaskPane
             {
                 panelResult.Visible = false;
                 txtDraftPrompt.Text = "";
-                ShowStatus("Draft inserted!", false);
+                ShowStatus("Черновик вставлен.", false);
             }
         }
 
@@ -646,7 +646,7 @@ namespace OutlookAI.TaskPane
             {
                 panelResult.Visible = false;
                 txtDraftPrompt.Text = "";
-                ShowStatus("Email replaced!", false);
+                ShowStatus("Текст письма заменён.", false);
             }
         }
 
@@ -706,13 +706,13 @@ namespace OutlookAI.TaskPane
                         return true;
                     }
                 }
-                ShowStatus("Could not find active email window.", true);
+                ShowStatus("Не удалось найти активное окно письма.", true);
                 return false;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("InsertEmailBody error: " + ex.Message);
-                ShowStatus("Could not update email: " + ex.Message, true);
+                ShowStatus("Не удалось обновить письмо: " + ex.Message, true);
                 return false;
             }
         }
@@ -731,13 +731,13 @@ namespace OutlookAI.TaskPane
                         return true;
                     }
                 }
-                ShowStatus("Could not find active email window.", true);
+                ShowStatus("Не удалось найти активное окно письма.", true);
                 return false;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("SetEmailBody error: " + ex.Message);
-                ShowStatus("Could not update email: " + ex.Message, true);
+                ShowStatus("Не удалось обновить письмо: " + ex.Message, true);
                 return false;
             }
         }
@@ -764,23 +764,23 @@ namespace OutlookAI.TaskPane
 
         private bool RequireSignedIn(string promptMessage)
         {
-            var auth = AuthService;
-            if (auth == null)
+            var credentials = CredentialService;
+            if (credentials == null)
             {
-                ShowStatus("Auth service unavailable. Restart Outlook.", true);
+                ShowStatus("Сервис учётных данных недоступен. Перезапустите Outlook.", true);
                 return false;
             }
-            var status = auth.GetStatus();
-            if (status.State == AuthState.Authenticated)
+            var status = credentials.GetStatus();
+            if (status.State == CredentialState.Configured)
             {
                 return true;
             }
             ShowStatus(promptMessage, true);
-            using (var settingsForm = new SettingsForm(auth))
+            using (var settingsForm = new SettingsForm(credentials))
             {
                 settingsForm.ShowDialog();
             }
-            return auth.GetStatus().State == AuthState.Authenticated;
+            return credentials.GetStatus().State == CredentialState.Configured;
         }
 
         partial void DisposeCustomResources()

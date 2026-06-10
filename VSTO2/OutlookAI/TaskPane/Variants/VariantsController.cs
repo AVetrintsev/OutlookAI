@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -23,7 +23,7 @@ namespace OutlookAI.TaskPane.Variants
     public sealed class VariantsController : IDisposable
     {
         private readonly Control _host;
-        private readonly CodexChatService _chat;
+        private readonly LiteLlmChatService _chat;
         private readonly IToolHost _toolHost;
         private readonly LiveOutlookSurface _surface;
         private readonly Func<string, bool> _insertCallback;   // body -> success
@@ -47,7 +47,7 @@ namespace OutlookAI.TaskPane.Variants
 
         public VariantsController(
             Control host,
-            CodexChatService chat,
+            LiteLlmChatService chat,
             IToolHost toolHost,
             LiveOutlookSurface surface,
             Func<string, bool> insertCallback,
@@ -69,7 +69,7 @@ namespace OutlookAI.TaskPane.Variants
             // Composer row: intent input + count + reasoning + Generate.
             var lblIntent = new Label
             {
-                Text = "Drafting intent:",
+                Text = "Задача для черновика:",
                 Font = new Font("Segoe UI", 9F),
                 Location = new Point(8, 8),
                 AutoSize = true
@@ -85,11 +85,11 @@ namespace OutlookAI.TaskPane.Variants
             };
             var intentTip = new ToolTip();
             intentTip.SetToolTip(_txtIntent,
-                "What do you want to say? (e.g. 'decline politely but leave the door open for Q3')");
+                "Что нужно сказать? Например: «вежливо отказаться, но оставить возможность вернуться к вопросу в 3 квартале»");
 
             var lblCount = new Label
             {
-                Text = "Count:",
+                Text = "Кол-во:",
                 Location = new Point(8, 86),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9F)
@@ -105,7 +105,7 @@ namespace OutlookAI.TaskPane.Variants
 
             var lblReasoning = new Label
             {
-                Text = "Effort:",
+                Text = "Уровень:",
                 Location = new Point(112, 86),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9F)
@@ -120,7 +120,7 @@ namespace OutlookAI.TaskPane.Variants
             // Populate the model-aware effort enum: rejects 'Minimal' on
             // gpt-5.5, includes 'XHigh' when supported, etc.
             // Leading "" is "(default)" - inherit Config.ReasoningEffort.
-            _cmbReasoning.Items.Add(""); // "(default)" placeholder
+            _cmbReasoning.Items.Add(""); // "(по умолчанию)" placeholder
             foreach (var effort in Config.ReasoningEffortsForModel(Config.Model))
             {
                 _cmbReasoning.Items.Add(effort);
@@ -133,7 +133,7 @@ namespace OutlookAI.TaskPane.Variants
 
             _btnGenerate = new Button
             {
-                Text = "Generate",
+                Text = "Создать",
                 Location = new Point(228, 84),
                 Width = 70,
                 Height = 24,
@@ -143,7 +143,7 @@ namespace OutlookAI.TaskPane.Variants
 
             _btnRegenerateAll = new Button
             {
-                Text = "Regenerate all",
+                Text = "Пересоздать",
                 Location = new Point(8, 114),
                 Width = 110,
                 Height = 22,
@@ -154,7 +154,7 @@ namespace OutlookAI.TaskPane.Variants
 
             _btnCancel = new Button
             {
-                Text = "Cancel",
+                Text = "Отмена",
                 Location = new Point(228, 114),
                 Width = 70,
                 Height = 22,
@@ -209,7 +209,7 @@ namespace OutlookAI.TaskPane.Variants
             if (string.IsNullOrEmpty(intent))
             {
                 TraceLog.Write("GenerateAsync aborted: empty intent", "Variants");
-                SetStatus("Type a drafting intent first.", isError: true);
+                SetStatus("Сначала опишите задачу для черновика.", isError: true);
                 return;
             }
 
@@ -217,7 +217,7 @@ namespace OutlookAI.TaskPane.Variants
             _activeCts = new CancellationTokenSource();
             SetUiEnabled(false);
             _btnCancel.Visible = true;
-            SetStatus("Generating...", isError: false);
+            SetStatus("Создание вариантов...", isError: false);
 
             TurnResult result = null;
             Exception caught = null;
@@ -286,28 +286,28 @@ namespace OutlookAI.TaskPane.Variants
             {
                 if (caught is OperationCanceledException)
                 {
-                    SetStatus("Cancelled.", false);
+                    SetStatus("Отменено.", false);
                     return;
                 }
                 if (caught != null)
                 {
-                    SetStatus("Error: " + caught.Message, true);
+                    SetStatus("Ошибка: " + caught.Message, true);
                     return;
                 }
                 if (result == null)
                 {
-                    SetStatus("Error: no result.", true);
+                    SetStatus("Ошибка: нет результата.", true);
                     return;
                 }
                 if (result.StopReason == StopReason.Cancelled)
                 {
-                    SetStatus("Cancelled.", false);
+                    SetStatus("Отменено.", false);
                     return;
                 }
                 if (result.StopReason == StopReason.Error)
                 {
                     TraceLog.Write("Variants error from chat: " + (result.ErrorMessage ?? "<none>"), "Variants");
-                    SetStatus("Error: " + (result.ErrorMessage ?? "unknown"), true);
+                    SetStatus("Ошибка: " + (result.ErrorMessage ?? "неизвестно"), true);
                     return;
                 }
 
@@ -316,7 +316,7 @@ namespace OutlookAI.TaskPane.Variants
                 if (variants.Count == 0)
                 {
                     TraceLog.Write("Variants raw text: " + (result.FinalAssistantText?.Substring(0, Math.Min(500, result.FinalAssistantText?.Length ?? 0)) ?? "<null>"), "Variants");
-                    SetStatus("Model didn't return parseable variants. Try again or refine the intent.", true);
+                    SetStatus("Модель не вернула распознаваемые варианты. Попробуйте ещё раз или уточните задачу.", true);
                     return;
                 }
 
@@ -338,13 +338,13 @@ namespace OutlookAI.TaskPane.Variants
                 }
 
                 RenderCards();
-                SetStatus("Done. " + _store.Count + " variant(s) ready.", false);
+                SetStatus("Готово. Вариантов: " + _store.Count + ".", false);
                 _btnRegenerateAll.Enabled = true;
             }
             catch (Exception ex)
             {
                 TraceLog.Write("FinalizeGeneration EXCEPTION: " + ex, "Variants");
-                SetStatus("Error: " + ex.Message, true);
+                SetStatus("Ошибка: " + ex.Message, true);
             }
             finally
             {
@@ -380,7 +380,7 @@ namespace OutlookAI.TaskPane.Variants
 
             var lblTone = new Label
             {
-                Text = "  " + variant.Tone + "  ",
+                Text = "  " + ToneDisplayName(variant.Tone) + "  ",
                 Location = new Point(6, 6),
                 AutoSize = true,
                 BackColor = ToneColor(variant.Tone),
@@ -390,7 +390,7 @@ namespace OutlookAI.TaskPane.Variants
 
             var lblChars = new Label
             {
-                Text = (variant.Body ?? "").Length + " chars",
+                Text = (variant.Body ?? "").Length + " симв.",
                 Location = new Point(180, 6),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8F),
@@ -409,7 +409,7 @@ namespace OutlookAI.TaskPane.Variants
 
             var btnInsert = new Button
             {
-                Text = "Insert",
+                Text = "Вставить",
                 Location = new Point(6, 95),
                 Width = 60,
                 Height = 22,
@@ -419,13 +419,13 @@ namespace OutlookAI.TaskPane.Variants
             {
                 if (_insertCallback?.Invoke(variant.Body ?? "") ?? false)
                 {
-                    SetStatus("Inserted variant: " + variant.Tone, false);
+                    SetStatus("Вариант вставлен: " + ToneDisplayName(variant.Tone), false);
                 }
             };
 
             var btnReplace = new Button
             {
-                Text = "Replace",
+                Text = "Заменить",
                 Location = new Point(70, 95),
                 Width = 60,
                 Height = 22,
@@ -435,13 +435,13 @@ namespace OutlookAI.TaskPane.Variants
             {
                 if (_replaceCallback?.Invoke(variant.Body ?? "") ?? false)
                 {
-                    SetStatus("Replaced body with variant: " + variant.Tone, false);
+                    SetStatus("Текст заменён вариантом: " + ToneDisplayName(variant.Tone), false);
                 }
             };
 
             var btnRegen = new Button
             {
-                Text = "Regenerate",
+                Text = "Ещё раз",
                 Location = new Point(134, 95),
                 Width = 80,
                 Height = 22,
@@ -451,7 +451,7 @@ namespace OutlookAI.TaskPane.Variants
 
             var lblRationale = new Label
             {
-                Text = string.IsNullOrEmpty(variant.Rationale) ? "" : ("Rationale: " + variant.Rationale),
+                Text = string.IsNullOrEmpty(variant.Rationale) ? "" : ("Почему: " + variant.Rationale),
                 Location = new Point(6, 122),
                 Size = new Size(263, 22),
                 Font = new Font("Segoe UI", 7.5F, FontStyle.Italic),
@@ -490,6 +490,23 @@ namespace OutlookAI.TaskPane.Variants
                 case Tone.Diplomatic:   return Color.FromArgb(110, 90, 150);
                 case Tone.Enthusiastic: return Color.FromArgb(180, 100, 80);
                 default:                return Color.Gray;
+            }
+        }
+
+        private static string ToneDisplayName(Tone tone)
+        {
+            switch (tone)
+            {
+                case Tone.Formal:       return "Формально";
+                case Tone.Brief:        return "Кратко";
+                case Tone.Persuasive:   return "Убедительно";
+                case Tone.Friendly:     return "Дружелюбно";
+                case Tone.Technical:    return "Технически";
+                case Tone.Apologetic:   return "С извинением";
+                case Tone.Direct:       return "Прямо";
+                case Tone.Diplomatic:   return "Дипломатично";
+                case Tone.Enthusiastic: return "С энтузиазмом";
+                default:                return tone.ToString();
             }
         }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Linq;
 using System.Threading;
@@ -17,14 +17,14 @@ namespace OutlookAI.TaskPane.Chat
 {
     /// <summary>
     /// Owns the Chat tab's WebView2 lifecycle and the JS&#x2194;C# bridge that
-    /// wires user input into <see cref="CodexChatService.RunTurnAsync"/>.
+    /// wires user input into <see cref="LiteLlmChatService.RunTurnAsync"/>.
     /// Per-Inspector instance, constructed by <see cref="AITaskPane"/> after
     /// <see cref="AITaskPane.Bind"/> hands it the tool host + surface.
     /// </summary>
     public sealed class ChatController : IDisposable
     {
         private readonly Control _hostContainer;
-        private readonly CodexChatService _chat;
+        private readonly LiteLlmChatService _chat;
         private readonly IToolHost _toolHost;
         private readonly LiveOutlookSurface _surface;
         private readonly ConversationStore _store;
@@ -41,7 +41,7 @@ namespace OutlookAI.TaskPane.Chat
 
         public ChatController(
             Control hostContainer,
-            CodexChatService chat,
+            LiteLlmChatService chat,
             IToolHost toolHost,
             LiveOutlookSurface surface,
             ConversationStore store)
@@ -74,7 +74,7 @@ namespace OutlookAI.TaskPane.Chat
             if (!WebView2Bootstrap.IsRuntimeInstalled())
             {
                 TraceLog.Write("WebView2 runtime NOT installed; showing fallback", "ChatController");
-                ShowFallback("WebView2 runtime not installed.\r\nRun the installer or download:\r\n" +
+                ShowFallback("Среда WebView2 Runtime не установлена.\r\nЗапустите установщик или скачайте её:\r\n" +
                              "https://developer.microsoft.com/microsoft-edge/webview2/");
                 return;
             }
@@ -99,7 +99,7 @@ namespace OutlookAI.TaskPane.Chat
             {
                 TraceLog.Write("InitializeAsync EXCEPTION: " + ex, "ChatController");
                 System.Diagnostics.Debug.WriteLine("ChatController.InitializeAsync: " + ex);
-                ShowFallback("WebView2 failed to initialize: " + ex.Message);
+                ShowFallback("Не удалось инициализировать WebView2: " + ex.Message);
             }
         }
 
@@ -293,7 +293,8 @@ namespace OutlookAI.TaskPane.Chat
             }
             catch (Exception ex)
             {
-                await RunScript("outlookai.showError(" + JsString(ex.Message ?? "") + ");");
+                TraceLog.Write("StartTurnAsync EXCEPTION: " + ex, "ChatController");
+                await RunScript("outlookai.showError(" + JsString(FormatTurnError(ex)) + ");");
             }
             finally
             {
@@ -348,6 +349,20 @@ namespace OutlookAI.TaskPane.Chat
                 System.Diagnostics.Debug.WriteLine("BuildSystemInstructions compose-state error: " + ex);
             }
             return prompt;
+        }
+
+        private static string FormatTurnError(Exception ex)
+        {
+            var detail = ex?.Message ?? "";
+            if (ex?.InnerException != null && !string.IsNullOrWhiteSpace(ex.InnerException.Message))
+            {
+                detail += " " + ex.InnerException.Message;
+            }
+            if (string.IsNullOrWhiteSpace(detail))
+            {
+                detail = "неизвестная ошибка";
+            }
+            return "Ошибка при обращении к LiteLLM: " + detail;
         }
 
         private async Task RunScript(string script)

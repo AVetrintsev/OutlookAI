@@ -1,35 +1,47 @@
-# Installing OutlookAI
+# Установка
 
-OutlookAI supports three install shapes. All three share the same installer
-(`Deploy/Install-OutlookAI.ps1`) and the same OAuth flow (sign in once with
-your ChatGPT account, then OutlookAI uses your existing subscription for
-inference).
+Для обычных пользователей можно собрать единый EXE-установщик. Для администраторской или тихой установки используйте `Deploy/Install-OutlookAI.ps1` напрямую.
 
-| Shape | Use case | Detail |
-|---|---|---|
-| **Single workstation** | One developer or power user. | [Deploy/README.txt — Shape A](../Deploy/README.txt) |
-| **Multi-user RDS / Terminal Server** | Shared server, many interactive users, one shared ChatGPT credential. | [Deploy/README.txt — Shape B](../Deploy/README.txt) |
-| **IT-managed image / silent install** | MDT / SCCM / corporate gold image. | [Deploy/README.txt — Shape C](../Deploy/README.txt) |
+Установщик записывает серверные значения LiteLLM по умолчанию в:
 
-## Quick start (single workstation)
+`C:\Program Files\OutlookAI\config.xml`
+
+Пример:
 
 ```powershell
-git clone https://github.com/kirklandsig/OutlookAI.git
-cd OutlookAI
-
-# Publish Release into a staging folder
-& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" `
-  "VSTO2\OutlookAI.sln" /target:Publish /p:Configuration=Release /p:Platform="Any CPU" `
-  /p:PublishDir="C:\OutlookAI\"
-
-# Install elevated
-Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned
-.\Deploy\Install-OutlookAI.ps1 -SourcePath "C:\OutlookAI"
-
-# Open Outlook → AI Assistant → sign in with your ChatGPT account.
+.\Deploy\Make-InstallerExe.ps1 `
+  -Tag v3.0.0 `
+  -LiteLlmBaseUrl "https://litellm.company.example/v1" `
+  -LiteLlmModel "company/outlook-chat" `
+  -LiteLlmVoiceModel "" `
+  -Temperature 0.2 `
+  -MaxTokens 4096
 ```
 
-For the full deployment story (cleanup, shared credentials, rotation,
-troubleshooting, rollback, uninstall), see
-[`Deploy/README.txt`](../Deploy/README.txt). That file is the canonical
-install guide; this page is a pointer.
+На выходе будет файл `out\OutlookAI-v3.0.0-Setup.exe`. Для сборки нужен MSBuild/Visual Studio с VSTO targets и встроенный Windows `iexpress.exe`; конечному пользователю Visual Studio для запуска готового EXE не нужна. Пользователь запускает его двойным кликом, без ручного запуска PowerShell. Если нужны права администратора, установщик запросит их через UAC.
+
+`LiteLlmVoiceModel` необязателен. Оставьте значение пустым или введите `null`, если в LiteLLM нет модели транскрибации.
+
+Ручной вариант:
+
+```powershell
+.\Deploy\Install-OutlookAI.ps1 `
+  -SourcePath "C:\OutlookAI" `
+  -LiteLlmBaseUrl "https://litellm.company.example/v1" `
+  -LiteLlmModel "company/outlook-chat" `
+  -LiteLlmVoiceModel "" `
+  -Temperature 0.2 `
+  -MaxTokens 4096
+```
+
+Установщик **не** записывает ключи API. Каждый пользователь открывает настройки OutlookAI и вводит собственный ключ API LiteLLM. Ключ хранится в пользовательском `%APPDATA%\OutlookAI\config.xml`.
+
+Пароль администратора для ввода пользовательского ключа API не нужен. Он должен использоваться только для административных настроек.
+
+Базовая проверка:
+
+1. В Outlook отображается группа ленты `AI Assistant`.
+2. Откройте настройки OutlookAI.
+3. Убедитесь, что отображаются правильные значения LiteLLM endpoint/model.
+4. Введите пользовательский ключ API LiteLLM.
+5. Запустите быструю команду или отправьте сообщение в чат.

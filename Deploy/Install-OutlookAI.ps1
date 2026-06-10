@@ -422,6 +422,17 @@ if (-not [string]::IsNullOrWhiteSpace($ConfigMirrorFilePath) -and
     Set-Content -Path $ConfigMirrorFilePath -Value $v3Config -Encoding UTF8
     Write-Host "  Wrote $ConfigMirrorFilePath" -ForegroundColor Gray
 }
+
+$sharedConfigFilePath = Join-Path $ProgramDataPath "config.xml"
+if (!(Test-Path $ProgramDataPath)) {
+    New-Item -ItemType Directory -Path $ProgramDataPath -Force | Out-Null
+}
+Set-Content -Path $sharedConfigFilePath -Value $v3Config -Encoding UTF8
+Write-Host "  Wrote $sharedConfigFilePath" -ForegroundColor Gray
+Write-Host "  Effective server config:" -ForegroundColor Gray
+Write-Host "    Base URL : $LiteLlmBaseUrl" -ForegroundColor Gray
+Write-Host "    Model    : $LiteLlmModel" -ForegroundColor Gray
+Write-Host "    Voice    : $LiteLlmVoiceModel" -ForegroundColor Gray
 # v2.1+ release packages ship a version.json alongside Install-OutlookAI.ps1.
 # Copy it into the install dir so the in-app updater knows what is installed.
 $stagedVersionJson = Join-Path $SourcePath "version.json"
@@ -479,26 +490,42 @@ Write-Host ("  Done ({0} per-user v1 configs renamed)." -f $renamed) -Foreground
 # WebView2 runtime" panel - the rest of the add-in (Actions tab, voice,
 # Variants tab) keeps working.
 Write-Host "[8/10] Ensuring Microsoft Edge WebView2 Runtime present..." -ForegroundColor Yellow
-$wv2KeyA = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-$wv2KeyB = "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-$wv2Installed = $false
-foreach ($k in @($wv2KeyA, $wv2KeyB)) {
-    if (Test-Path $k) {
-        $pv = (Get-ItemProperty $k -ErrorAction SilentlyContinue).pv
-        if (-not [string]::IsNullOrWhiteSpace($pv)) {
-            $wv2Installed = $true
-            Write-Host "  WebView2 Runtime detected (version $pv)." -ForegroundColor Gray
-            break
+function Test-WebView2RuntimeInstalled {
+    $runtimeKeys = @(
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+    )
+
+    foreach ($key in $runtimeKeys) {
+        if (Test-Path $key) {
+            $pv = (Get-ItemProperty $key -ErrorAction SilentlyContinue).pv
+            if (-not [string]::IsNullOrWhiteSpace($pv)) {
+                return $pv
+            }
         }
     }
+
+    return $null
 }
-if (-not $wv2Installed) {
+
+$wv2Version = Test-WebView2RuntimeInstalled
+if ($wv2Version) {
+    Write-Host "  WebView2 Runtime detected (version $wv2Version)." -ForegroundColor Gray
+} else {
     $bootstrap = Join-Path $SourcePath "MicrosoftEdgeWebView2Setup.exe"
     if (Test-Path $bootstrap) {
         Write-Host "  Installing WebView2 Runtime (silent)..." -ForegroundColor Gray
         try {
-            Start-Process -FilePath $bootstrap -ArgumentList "/silent","/install" -Wait
-            Write-Host "  WebView2 Runtime installed." -ForegroundColor Gray
+            $wv2Process = Start-Process -FilePath $bootstrap -ArgumentList "/silent","/install" -Wait -PassThru
+            Write-Host "  WebView2 bootstrapper exit code: $($wv2Process.ExitCode)" -ForegroundColor Gray
+            Start-Sleep -Seconds 3
+            $wv2Version = Test-WebView2RuntimeInstalled
+            if ($wv2Version) {
+                Write-Host "  WebView2 Runtime installed (version $wv2Version)." -ForegroundColor Gray
+            } else {
+                Write-Host "  WARN: WebView2 bootstrapper finished, but runtime was not detected." -ForegroundColor Yellow
+                Write-Host "  Chat tab will show the runtime-missing fallback panel until WebView2 is installed manually." -ForegroundColor Yellow
+            }
         } catch {
             Write-Host "  WARN: WebView2 bootstrapper failed: $_" -ForegroundColor Yellow
             Write-Host "  Chat tab will show the runtime-missing fallback panel." -ForegroundColor Yellow

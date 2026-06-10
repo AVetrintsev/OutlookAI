@@ -51,7 +51,13 @@ namespace OutlookAI.Services
         }
 
         public static string ChatCompletionsEndpoint
-            => Config.NormalizeBaseUrl(Config.LiteLlmBaseUrl) + "/chat/completions";
+        {
+            get
+            {
+                Config.EnsureLiteLlmServerConfigured();
+                return Config.NormalizeBaseUrl(Config.LiteLlmBaseUrl) + "/chat/completions";
+            }
+        }
 
         private static HttpClient BuildDefaultHttpClient()
         {

@@ -74,11 +74,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function ConvertTo-PowerShellLiteral {
-    param([AllowEmptyString()][string]$Value = "")
-    return "'" + $Value.Replace("'", "''") + "'"
-}
-
 function Write-Utf8NoBom {
     param(
         [Parameter(Mandatory=$true)][string]$Path,
@@ -86,6 +81,15 @@ function Write-Utf8NoBom {
     )
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
+
+function Write-JsonUtf8NoBom {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)]$Value
+    )
+
+    Write-Utf8NoBom -Path $Path -Content ($Value | ConvertTo-Json -Depth 5)
 }
 
 function Normalize-OptionalValue {
@@ -103,16 +107,76 @@ function Normalize-OptionalValue {
     return $trimmed
 }
 
+function Test-LikelyOllamaEndpoint {
+    param([string]$BaseUrl)
+
+    $value = if ($null -eq $BaseUrl) { "" } else { $BaseUrl }
+    return $value -match '://(localhost|127\.0\.0\.1|\[::1\]):11434(/|$)'
+}
+
+function Get-AvailableInstallerExePath {
+    param(
+        [Parameter(Mandatory=$true)][string]$Directory,
+        [Parameter(Mandatory=$true)][string]$Tag
+    )
+
+    $preferredPath = Join-Path $Directory "OutlookAI-$Tag-Setup.exe"
+    if (-not (Test-Path -LiteralPath $preferredPath)) {
+        return $preferredPath
+    }
+
+    try {
+        Remove-Item -LiteralPath $preferredPath -Force -ErrorAction Stop
+        return $preferredPath
+    } catch {
+        $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+        $fallbackPath = Join-Path $Directory "OutlookAI-$Tag-Setup-$timestamp.exe"
+        Write-Warning "Existing installer EXE is locked and cannot be replaced: $preferredPath"
+        Write-Warning "Building a new installer instead: $fallbackPath"
+        return $fallbackPath
+    }
+}
+
+function Wait-FileReadable {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [int]$TimeoutSeconds = 30
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $lastError = $null
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+            $stream.Dispose()
+            return
+        } catch {
+            $lastError = $_.Exception.Message
+            Start-Sleep -Milliseconds 500
+        }
+    }
+
+    throw "File is still locked after $TimeoutSeconds seconds: $Path. Last error: $lastError"
+}
+
 if ($Tag -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z\.\-]+)?$') {
     throw "Tag '$Tag' is not a valid semver tag (e.g. v3.0.0 or v3.0.0-beta.1)."
 }
 
+if ((Test-LikelyOllamaEndpoint -BaseUrl $LiteLlmBaseUrl) -and $LiteLlmModel -notmatch '^ollama/') {
+    Write-Warning "LiteLlmBaseUrl '$LiteLlmBaseUrl' looks like Ollama, not LiteLLM proxy. LiteLLM aliases like '$LiteLlmModel' require the LiteLLM proxy URL, usually http://localhost:4000/v1."
+}
+
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $releaseScript = Join-Path $repoRoot "Deploy\Make-ReleaseZip.ps1"
+$setupTemplate = Join-Path $repoRoot "Deploy\OutlookAI-Setup.ps1"
 $iexpress = Join-Path $env:WINDIR "System32\iexpress.exe"
 
 if (-not (Test-Path -LiteralPath $releaseScript)) {
     throw "Missing release packaging script: $releaseScript"
+}
+if (-not (Test-Path -LiteralPath $setupTemplate)) {
+    throw "Missing installer bootstrap script: $setupTemplate"
 }
 if (-not (Test-Path -LiteralPath $iexpress)) {
     throw "iexpress.exe was not found. This script must run on Windows with IExpress available."
@@ -153,68 +217,21 @@ try {
     Copy-Item -LiteralPath $zipPath -Destination $payloadZip -Force
 
     $setupPs1 = Join-Path $packageRoot "OutlookAI-Setup.ps1"
-    $baseUrlLiteral = ConvertTo-PowerShellLiteral $LiteLlmBaseUrl
-    $modelLiteral = ConvertTo-PowerShellLiteral $LiteLlmModel
     $LiteLlmVoiceModel = Normalize-OptionalValue $LiteLlmVoiceModel
-    $voiceModelLiteral = ConvertTo-PowerShellLiteral $LiteLlmVoiceModel
-    $setupContent = @"
-`$ErrorActionPreference = "Stop"
+    Copy-Item -LiteralPath $setupTemplate -Destination $setupPs1 -Force
 
-function Test-IsAdministrator {
-    `$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    `$principal = New-Object Security.Principal.WindowsPrincipal(`$identity)
-    return `$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
-`$payload = Join-Path `$PSScriptRoot "OutlookAI-Payload.zip"
-if (-not (Test-Path -LiteralPath `$payload)) {
-    throw "Installer payload is missing: `$payload"
-}
-
-`$extractRoot = Join-Path `$env:TEMP ("OutlookAI-Setup-" + [Guid]::NewGuid().ToString("N"))
-New-Item -ItemType Directory -Path `$extractRoot | Out-Null
-
-try {
-    Expand-Archive -LiteralPath `$payload -DestinationPath `$extractRoot -Force
-    `$installer = Join-Path `$extractRoot "Install-OutlookAI.ps1"
-    if (-not (Test-Path -LiteralPath `$installer)) {
-        throw "Install-OutlookAI.ps1 was not found in the installer payload."
-    }
-
-    `$installArgs = @(
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-File", `$installer,
-        "-SourcePath", `$extractRoot,
-        "-LiteLlmBaseUrl", $baseUrlLiteral,
-        "-LiteLlmModel", $modelLiteral,
-        "-LiteLlmVoiceModel", $voiceModelLiteral,
-        "-Temperature", "$Temperature",
-        "-MaxTokens", "$MaxTokens",
-        "-MaxBulkExportRows", "$MaxBulkExportRows"
-    )
-
-    if (-not (Test-IsAdministrator)) {
-        `$process = Start-Process -FilePath "powershell.exe" -ArgumentList `$installArgs -Verb RunAs -Wait -PassThru
-        exit `$process.ExitCode
-    }
-
-    & powershell.exe @installArgs
-    exit `$LASTEXITCODE
-}
-finally {
-    if (Test-Path -LiteralPath `$extractRoot) {
-        Remove-Item -LiteralPath `$extractRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
-}
-"@
-    Write-Utf8NoBom -Path $setupPs1 -Content $setupContent
+    $installerConfigPath = Join-Path $packageRoot "OutlookAI-InstallerConfig.json"
+    Write-JsonUtf8NoBom -Path $installerConfigPath -Value ([ordered]@{
+        LiteLlmBaseUrl = $LiteLlmBaseUrl
+        LiteLlmModel = $LiteLlmModel
+        LiteLlmVoiceModel = $LiteLlmVoiceModel
+        Temperature = $Temperature
+        MaxTokens = $MaxTokens
+        MaxBulkExportRows = $MaxBulkExportRows
+    })
 
     $sedPath = Join-Path $packageRoot "OutlookAI-Installer.sed"
-    $exePath = Join-Path $resolvedOutDir "OutlookAI-$Tag-Setup.exe"
-    if (Test-Path -LiteralPath $exePath) {
-        Remove-Item -LiteralPath $exePath -Force
-    }
+    $exePath = Get-AvailableInstallerExePath -Directory $resolvedOutDir -Tag $Tag
 
     $sedContent = @"
 [Version]
@@ -223,10 +240,10 @@ SEDVersion=3
 
 [Options]
 PackagePurpose=InstallApp
-ShowInstallProgramWindow=0
+ShowInstallProgramWindow=1
 HideExtractAnimation=0
 UseLongFileName=1
-InsideCompressed=0
+InsideCompressed=1
 CAB_FixedSize=0
 CAB_ResvCodeSigning=0
 RebootMode=N
@@ -244,6 +261,7 @@ SourceFiles=SourceFiles
 [Strings]
 FILE0=OutlookAI-Setup.ps1
 FILE1=OutlookAI-Payload.zip
+FILE2=OutlookAI-InstallerConfig.json
 
 [SourceFiles]
 SourceFiles0=$packageRoot
@@ -251,6 +269,7 @@ SourceFiles0=$packageRoot
 [SourceFiles0]
 %FILE0%=
 %FILE1%=
+%FILE2%=
 "@
     Write-Utf8NoBom -Path $sedPath -Content $sedContent
 
@@ -267,6 +286,7 @@ SourceFiles0=$packageRoot
         Write-Host "WARN: IExpress returned exit code $iexpressExitCode, but installer EXE was created." -ForegroundColor Yellow
     }
 
+    Wait-FileReadable -Path $exePath
     $sha = (Get-FileHash -LiteralPath $exePath -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath ($exePath + ".sha256") -Encoding ASCII -Value $sha -NoNewline
 
@@ -277,6 +297,9 @@ SourceFiles0=$packageRoot
         Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath ($zipPath + ".sha256") -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath ($exePath + ".sha256") -Force -ErrorAction SilentlyContinue
+        Get-ChildItem -LiteralPath $resolvedOutDir -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^(RCX.*\.tmp|~OutlookAI-.*-Setup\.CAB)$' } |
+            Remove-Item -Force -ErrorAction SilentlyContinue
     }
 
     if (-not $KeepIntermediate) {

@@ -65,5 +65,24 @@ namespace OutlookAI.Tests.Services
                 Assert.Contains("rate limited", ex.Message);
             }
         }
+
+        [Fact]
+        public async Task ProcessEmailAsync_ThrowsConfigError_WhenInstallerConfigMissing()
+        {
+            Config.LiteLlmBaseUrl = Config.DefaultLiteLlmBaseUrl;
+
+            var fake = new FakeHttpMessageHandler();
+            using (var credentials = new LiteLlmCredentialService())
+            using (var chatHttp = new HttpClient(fake))
+            using (var chat = new LiteLlmChatService(credentials, chatHttp))
+            {
+                var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+                    () => chat.ProcessEmailAsync(
+                        LiteLlmChatService.ActionType.Proofread, "x"));
+
+                Assert.Contains("Серверная конфигурация LiteLLM не установлена", ex.Message);
+                Assert.Empty(fake.Requests);
+            }
+        }
     }
 }

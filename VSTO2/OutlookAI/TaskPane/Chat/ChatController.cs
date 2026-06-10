@@ -9,6 +9,7 @@ using Microsoft.Web.WebView2.WinForms;
 using Newtonsoft.Json.Linq;
 using OutlookAI.Diagnostics;
 using OutlookAI.Services;
+using OutlookAI.Services.CustomActions;
 using OutlookAI.Services.Export;
 using OutlookAI.Services.Chat;
 using OutlookAI.Services.Tools;
@@ -30,6 +31,7 @@ namespace OutlookAI.TaskPane.Chat
         private readonly ConversationStore _store;
         private readonly Func<string> _composerSystemPrompt;
         private readonly ExportBridge _exportBridge;
+        private readonly CustomActionStore _customActionStore = new CustomActionStore();
 
         private WebView2 _webView;
         private CancellationTokenSource _activeCts;
@@ -157,6 +159,17 @@ namespace OutlookAI.TaskPane.Chat
                             (string)payload?["text"] ?? "",
                             (string)payload?["reasoning"]);
                         break;
+                    case "custom_action":
+                        _ = StartCustomActionAsync((string)payload?["id"] ?? "");
+                        break;
+                    case "custom_action_create":
+                        SaveCustomAction(payload);
+                        PushCustomActionChips();
+                        break;
+                    case "custom_action_delete":
+                        DeleteCustomAction((string)payload?["id"] ?? "");
+                        PushCustomActionChips();
+                        break;
                     case "stop":
                         try { _activeCts?.Cancel(); } catch { }
                         break;
@@ -186,7 +199,31 @@ namespace OutlookAI.TaskPane.Chat
             _ = RunScript("outlookai.applyTheme('light');");
             PushReasoningOptions();
             PushContextStripFromSurface();
+            PushCustomActionChips();
             TraceLog.Write("OnWebViewReady completed", "ChatController");
+        }
+
+        private void PushCustomActionChips()
+        {
+            try
+            {
+                var chipsArr = new JArray();
+                foreach (var custom in _customActionStore.Load())
+                {
+                    chipsArr.Add(new JObject(
+                        new JProperty("id", custom.Id),
+                        new JProperty("type", "custom_action"),
+                        new JProperty("label", custom.Title),
+                        new JProperty("prompt", custom.Description ?? custom.Prompt ?? "")));
+                }
+                _ = RunScript("outlookai.setQuickActions(" +
+                    chipsArr.ToString(Newtonsoft.Json.Formatting.None) +
+                    ", {allowCustomActionManagement:true});");
+            }
+            catch (Exception ex)
+            {
+                TraceLog.Write("PushCustomActionChips error: " + ex.Message, "ChatController");
+            }
         }
 
         /// <summary>
@@ -344,6 +381,130 @@ namespace OutlookAI.TaskPane.Chat
                 System.Diagnostics.Debug.WriteLine("BuildSystemInstructions compose-state error: " + ex);
             }
             return prompt;
+        }
+
+        private async Task StartCustomActionAsync(string actionId)
+        {
+            TraceLog.Write(">> StartCustomActionAsync id=" + actionId, "ChatController");
+            if (_turnInFlight || string.IsNullOrWhiteSpace(actionId) || !_isReady || _surface == null)
+            {
+                TraceLog.Write("StartCustomActionAsync aborted (gate)", "ChatController");
+                return;
+            }
+
+            var action = _customActionStore.Load()
+                .FirstOrDefault(a => string.Equals(a.Id, actionId, StringComparison.OrdinalIgnoreCase));
+            if (action == null)
+            {
+                await RunScript("outlookai.showError(" + JsString("Пользовательское действие не найдено.") + ");");
+                return;
+            }
+
+            _turnInFlight = true;
+            _activeCts = new CancellationTokenSource();
+            await RunScript("outlookai.appendUserMessage(" + JsString(action.Title) + ");");
+            await RunScript("outlookai.setComposerEnabled(false, true);");
+            var assistantId = "asst_" + (++_nextMessageId);
+            await RunScript("outlookai.appendAssistantMessage(" + JsString(assistantId) + ", '');");
+
+            try
+            {
+                var runner = new CustomActionRunner(_chat, _surface);
+                var result = await runner.RunAsync(action, _activeCts.Token).ConfigureAwait(false);
+                await RunScript("outlookai.appendTextDelta(" +
+                    JsString(assistantId) + ", " + JsString(result.Text ?? "") + ");");
+                if (!string.IsNullOrWhiteSpace(result.FilePath))
+                {
+                    var fileInfo = new JObject(
+                        new JProperty("path", result.FilePath),
+                        new JProperty("format", action.Output == "export_pdf" ? "pdf" : "file"));
+                    await RunScript("outlookai.onFileSaved(" +
+                        JsString(assistantId) + ", " + fileInfo.ToString(Newtonsoft.Json.Formatting.None) + ");");
+                }
+                await RunScript("outlookai.finalizeAssistantMessage(" + JsString(assistantId) + ", {});");
+            }
+            catch (OperationCanceledException)
+            {
+                await RunScript("outlookai.finalizeAssistantMessage(" + JsString(assistantId) + ", {stopped:true});");
+            }
+            catch (Exception ex)
+            {
+                TraceLog.Write("StartCustomActionAsync EXCEPTION: " + ex, "ChatController");
+                await RunScript("outlookai.showError(" + JsString(FormatTurnError(ex)) + ");");
+                await RunScript("outlookai.finalizeAssistantMessage(" + JsString(assistantId) + ", {error:true});");
+            }
+            finally
+            {
+                _turnInFlight = false;
+                _activeCts?.Dispose();
+                _activeCts = null;
+                await RunScript("outlookai.setComposerEnabled(true, false);");
+                TraceLog.Write("<< StartCustomActionAsync", "ChatController");
+            }
+        }
+
+        private void SaveCustomAction(JObject payload)
+        {
+            try
+            {
+                if (payload == null)
+                {
+                    return;
+                }
+
+                var title = ((string)payload["title"] ?? "").Trim();
+                var prompt = ((string)payload["prompt"] ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(prompt))
+                {
+                    _ = RunScript("outlookai.showError(" + JsString("Заполните название и промпт действия.") + ");");
+                    return;
+                }
+
+                var source = (string)payload["source"] ?? "current_selection";
+                var action = new CustomActionDefinition
+                {
+                    Id = CustomActionStore.MakeActionId(title),
+                    Title = title,
+                    Description = ((string)payload["description"] ?? "").Trim(),
+                    Prompt = prompt,
+                    Context = new CustomActionContext
+                    {
+                        Source = source,
+                        MessageScope = source == "related_thread" ? "thread" : "selected",
+                        FolderScope = source == "all_folders" ? "all_folders" : "current_folder",
+                        ReadFilter = (string)payload["read_filter"] ?? "all",
+                        TimeRange = (string)payload["time_range"] ?? "today",
+                        IncludeFullBodies = (bool?)payload["include_full_bodies"] ?? true,
+                        IncludeAttachments = (bool?)payload["include_attachments"] ?? false,
+                        MaxItems = Math.Max(1, Math.Min(100, (int?)payload["max_items"] ?? 20))
+                    },
+                    Output = (string)payload["output"] ?? "chat",
+                    AllowTools = (bool?)payload["allow_tools"] ?? false
+                };
+
+                _customActionStore.Upsert(action);
+            }
+            catch (Exception ex)
+            {
+                TraceLog.Write("SaveCustomAction error: " + ex, "ChatController");
+                _ = RunScript("outlookai.showError(" + JsString("Не удалось сохранить действие: " + ex.Message) + ");");
+            }
+        }
+
+        private void DeleteCustomAction(string id)
+        {
+            try
+            {
+                if (!_customActionStore.Delete(id))
+                {
+                    _ = RunScript("outlookai.showError(" + JsString("Пользовательское действие не найдено.") + ");");
+                }
+            }
+            catch (Exception ex)
+            {
+                TraceLog.Write("DeleteCustomAction error: " + ex, "ChatController");
+                _ = RunScript("outlookai.showError(" + JsString("Не удалось удалить действие: " + ex.Message) + ");");
+            }
         }
 
         private static string FormatTurnError(Exception ex)

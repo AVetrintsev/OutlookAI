@@ -33,7 +33,6 @@ namespace OutlookAI
         private const int MinMaxTokens = 1;
         private const int MaxMaxTokens = 200000;
 
-        public static string AdminPassword { get; set; } = "admin";
         public static string LiteLlmBaseUrl { get; set; } = DefaultLiteLlmBaseUrl;
         public static string LiteLlmApiKey { get; set; } = "";
         public static string Model { get; set; } = DefaultModel;
@@ -171,7 +170,6 @@ namespace OutlookAI
 
         public static void ResetDefaults()
         {
-            AdminPassword = "admin";
             LiteLlmBaseUrl = DefaultLiteLlmBaseUrl;
             LiteLlmApiKey = "";
             Model = DefaultModel;
@@ -198,12 +196,6 @@ namespace OutlookAI
                 if (root == null)
                 {
                     return;
-                }
-
-                var adminPassword = root.Element("AdminPassword");
-                if (adminPassword != null && !string.IsNullOrEmpty(adminPassword.Value))
-                {
-                    AdminPassword = adminPassword.Value;
                 }
 
                 var reasoningEffort = root.Element("ReasoningEffort");
@@ -338,7 +330,6 @@ namespace OutlookAI
         {
             var userDoc = new XDocument(
                 new XElement("Config",
-                    new XElement("AdminPassword", AdminPassword),
                     new XElement("LiteLlmApiKey", LiteLlmApiKey ?? ""),
                     new XElement("ReasoningEffort", ReasoningEffort),
                     new XElement("WriteToolsEnabled", WriteToolsEnabled),

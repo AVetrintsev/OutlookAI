@@ -163,6 +163,14 @@ namespace OutlookAI.TaskPane.InboxCopilot
                     case "custom_action":
                         _ = StartCustomActionAsync((string)payload?["id"] ?? "");
                         break;
+                    case "custom_action_create":
+                        SaveCustomAction(payload);
+                        PushContextStripAndChips();
+                        break;
+                    case "custom_action_delete":
+                        DeleteCustomAction((string)payload?["id"] ?? "");
+                        PushContextStripAndChips();
+                        break;
                     case "stop":
                         try { _activeCts?.Cancel(); } catch { }
                         break;
@@ -268,11 +276,76 @@ namespace OutlookAI.TaskPane.InboxCopilot
                         new JProperty("prompt", custom.Description ?? custom.Prompt ?? "")));
                 }
                 _ = RunScript("outlookai.setQuickActions(" +
-                    chipsArr.ToString(Newtonsoft.Json.Formatting.None) + ");");
+                    chipsArr.ToString(Newtonsoft.Json.Formatting.None) +
+                    ", {allowCustomActionManagement:true});");
             }
             catch (Exception ex)
             {
                 TraceLog.Write("PushContextStripAndChips error: " + ex.Message, "InboxCopilot");
+            }
+        }
+
+        private void SaveCustomAction(JObject payload)
+        {
+            try
+            {
+                if (payload == null)
+                {
+                    return;
+                }
+
+                var title = ((string)payload["title"] ?? "").Trim();
+                var prompt = ((string)payload["prompt"] ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(prompt))
+                {
+                    _ = RunScript("outlookai.showError(" + JsString("Заполните название и промпт действия.") + ");");
+                    return;
+                }
+
+                var source = (string)payload["source"] ?? "current_selection";
+                var action = new CustomActionDefinition
+                {
+                    Id = CustomActionStore.MakeActionId(title),
+                    Title = title,
+                    Description = ((string)payload["description"] ?? "").Trim(),
+                    Prompt = prompt,
+                    Context = new CustomActionContext
+                    {
+                        Source = source,
+                        MessageScope = source == "related_thread" ? "thread" : "selected",
+                        FolderScope = source == "all_folders" ? "all_folders" : "current_folder",
+                        ReadFilter = (string)payload["read_filter"] ?? "all",
+                        TimeRange = (string)payload["time_range"] ?? "today",
+                        IncludeFullBodies = (bool?)payload["include_full_bodies"] ?? true,
+                        IncludeAttachments = (bool?)payload["include_attachments"] ?? false,
+                        MaxItems = Math.Max(1, Math.Min(100, (int?)payload["max_items"] ?? 20))
+                    },
+                    Output = (string)payload["output"] ?? "chat",
+                    AllowTools = (bool?)payload["allow_tools"] ?? false
+                };
+
+                _customActionStore.Upsert(action);
+            }
+            catch (Exception ex)
+            {
+                TraceLog.Write("SaveCustomAction error: " + ex, "InboxCopilot");
+                _ = RunScript("outlookai.showError(" + JsString("Не удалось сохранить действие: " + ex.Message) + ");");
+            }
+        }
+
+        private void DeleteCustomAction(string id)
+        {
+            try
+            {
+                if (!_customActionStore.Delete(id))
+                {
+                    _ = RunScript("outlookai.showError(" + JsString("Пользовательское действие не найдено.") + ");");
+                }
+            }
+            catch (Exception ex)
+            {
+                TraceLog.Write("DeleteCustomAction error: " + ex, "InboxCopilot");
+                _ = RunScript("outlookai.showError(" + JsString("Не удалось удалить действие: " + ex.Message) + ");");
             }
         }
 

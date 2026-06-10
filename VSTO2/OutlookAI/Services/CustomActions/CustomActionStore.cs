@@ -61,6 +61,37 @@ namespace OutlookAI.Services.CustomActions
             Save(actions);
         }
 
+        public bool Delete(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                return false;
+            }
+
+            var actions = Load().ToList();
+            var removed = actions.RemoveAll(a => string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase));
+            if (removed > 0)
+            {
+                Save(actions);
+            }
+            return removed > 0;
+        }
+
+        public static string MakeActionId(string title)
+        {
+            var chars = (title ?? "").Trim().ToLowerInvariant()
+                .Select(ch => char.IsLetterOrDigit(ch) ? ch : '_')
+                .ToArray();
+            var id = new string(chars).Trim('_');
+            while (id.Contains("__"))
+            {
+                id = id.Replace("__", "_");
+            }
+            return string.IsNullOrWhiteSpace(id)
+                ? "custom_action_" + DateTime.UtcNow.ToString("yyyyMMddHHmmss")
+                : id;
+        }
+
         private void EnsureFileExists()
         {
             var dir = System.IO.Path.GetDirectoryName(Path);

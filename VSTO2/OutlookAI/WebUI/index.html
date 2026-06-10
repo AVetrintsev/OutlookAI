@@ -20,6 +20,66 @@
          (so the compose pane, which never calls setQuickActions, looks
          unchanged from Phase 2). -->
     <div id="quickActions" class="quick-actions"></div>
+    <div id="customActionDialog" class="custom-action-dialog" hidden>
+      <div class="custom-action-panel" role="dialog" aria-modal="true" aria-labelledby="customActionTitle">
+        <div class="custom-action-header">
+          <div id="customActionTitle" class="custom-action-title">Новое действие</div>
+          <button id="btnCustomActionClose" class="icon-btn" type="button" title="Закрыть" aria-label="Закрыть">×</button>
+        </div>
+        <label class="field-label" for="customActionName">Название</label>
+        <input id="customActionName" class="field-input" type="text" maxlength="80">
+        <label class="field-label" for="customActionHint">Описание</label>
+        <input id="customActionHint" class="field-input" type="text" maxlength="160">
+        <label class="field-label" for="customActionPrompt">Промпт</label>
+        <textarea id="customActionPrompt" class="field-input field-textarea" rows="5"></textarea>
+        <div class="field-grid">
+          <label class="field-label">Источник
+            <select id="customActionSource" class="field-input">
+              <option value="current_selection">Выбранные сообщения</option>
+              <option value="current_open_message">Текущее открытое сообщение</option>
+              <option value="related_thread">Вся связанная переписка</option>
+              <option value="current_folder">Текущая папка</option>
+              <option value="all_folders">Все папки</option>
+            </select>
+          </label>
+          <label class="field-label">Фильтр
+            <select id="customActionFilter" class="field-input">
+              <option value="all">Все</option>
+              <option value="unread">Непрочитанные</option>
+              <option value="read">Прочитанные</option>
+            </select>
+          </label>
+          <label class="field-label">Период
+            <select id="customActionPeriod" class="field-input">
+              <option value="last_hour">Последний час</option>
+              <option value="today">Сегодня</option>
+              <option value="yesterday">Вчера</option>
+              <option value="since_last_run">С последнего запуска</option>
+              <option value="manual">Вручную</option>
+            </select>
+          </label>
+          <label class="field-label">Max items
+            <input id="customActionMaxItems" class="field-input" type="number" min="1" max="100" value="20">
+          </label>
+        </div>
+        <div class="field-row">
+          <label><input id="customActionFullBodies" type="checkbox" checked> Полные тела писем</label>
+          <label><input id="customActionAttachments" type="checkbox"> Вложения/метаданные</label>
+        </div>
+        <label class="field-label">Результат
+          <select id="customActionOutput" class="field-input">
+            <option value="chat">Показать в чате</option>
+            <option value="create_draft">Создать черновик</option>
+            <option value="export_pdf">Экспорт PDF</option>
+            <option value="export_excel">Экспорт Excel</option>
+          </select>
+        </label>
+        <div class="custom-action-footer">
+          <button id="btnCustomActionCancel" class="btn btn-ghost" type="button">Отмена</button>
+          <button id="btnCustomActionSave" class="btn btn-primary" type="button">Добавить</button>
+        </div>
+      </div>
+    </div>
     <div id="composer" class="composer">
       <textarea id="composerInput"
                 class="composer-input"

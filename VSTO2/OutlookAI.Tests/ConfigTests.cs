@@ -22,7 +22,6 @@ namespace OutlookAI.Tests
             var (g, u) = MakeTempPaths();
             Config.LoadConfigFromPaths(g, u);
 
-            Assert.Equal("admin", Config.AdminPassword);
             Assert.Equal("https://litellm.example.com/v1", Config.LiteLlmBaseUrl);
             Assert.Equal("", Config.LiteLlmApiKey);
             Assert.Equal("gpt-4.1-mini", Config.Model);

@@ -38,6 +38,20 @@
   var $ctxRecipients = document.getElementById('ctxRecipients');
   var $ctxThread = document.getElementById('ctxThread');
   var $quickActions = document.getElementById('quickActions');
+  var $customActionDialog = document.getElementById('customActionDialog');
+  var $customActionName = document.getElementById('customActionName');
+  var $customActionHint = document.getElementById('customActionHint');
+  var $customActionPrompt = document.getElementById('customActionPrompt');
+  var $customActionSource = document.getElementById('customActionSource');
+  var $customActionFilter = document.getElementById('customActionFilter');
+  var $customActionPeriod = document.getElementById('customActionPeriod');
+  var $customActionMaxItems = document.getElementById('customActionMaxItems');
+  var $customActionFullBodies = document.getElementById('customActionFullBodies');
+  var $customActionAttachments = document.getElementById('customActionAttachments');
+  var $customActionOutput = document.getElementById('customActionOutput');
+  var $btnCustomActionClose = document.getElementById('btnCustomActionClose');
+  var $btnCustomActionCancel = document.getElementById('btnCustomActionCancel');
+  var $btnCustomActionSave = document.getElementById('btnCustomActionSave');
 
   // -- Bridge to host ----------------------------------------------
   function postToHost(obj) {
@@ -383,6 +397,75 @@
 
   var assistantMessages = {}; // id -> { container, content, raw }
   var toolCards = {};         // callId -> element
+  var isCtrlDown = false;
+  var selectedCustomActionId = null;
+
+  function setSelectedCustomAction(id) {
+    selectedCustomActionId = id || null;
+    if (!$quickActions) return;
+    var chips = $quickActions.querySelectorAll('.qa-chip-custom');
+    for (var i = 0; i < chips.length; i++) {
+      var isSelected = selectedCustomActionId && chips[i].dataset.actionId === selectedCustomActionId;
+      chips[i].classList.toggle('is-selected', !!isSelected);
+    }
+  }
+
+  function openCustomActionDialog() {
+    if (!$customActionDialog) return;
+    $customActionName.value = '';
+    $customActionHint.value = '';
+    $customActionPrompt.value = '';
+    $customActionSource.value = 'current_selection';
+    $customActionFilter.value = 'all';
+    $customActionPeriod.value = 'today';
+    $customActionMaxItems.value = '20';
+    $customActionFullBodies.checked = true;
+    $customActionAttachments.checked = false;
+    $customActionOutput.value = 'chat';
+    $customActionDialog.hidden = false;
+    try { $customActionName.focus(); } catch (e) { /* best-effort */ }
+  }
+
+  function closeCustomActionDialog() {
+    if ($customActionDialog) $customActionDialog.hidden = true;
+  }
+
+  function saveCustomActionFromDialog() {
+    var title = ($customActionName && $customActionName.value || '').trim();
+    var prompt = ($customActionPrompt && $customActionPrompt.value || '').trim();
+    if (!title || !prompt) {
+      api.showError('Заполните название и промпт действия.');
+      return;
+    }
+
+    var maxItems = parseInt($customActionMaxItems && $customActionMaxItems.value || '20', 10);
+    if (!isFinite(maxItems) || maxItems < 1) maxItems = 20;
+    if (maxItems > 100) maxItems = 100;
+
+    postToHost({
+      type: 'custom_action_create',
+      payload: {
+        title: title,
+        description: ($customActionHint && $customActionHint.value || '').trim(),
+        prompt: prompt,
+        source: $customActionSource ? $customActionSource.value : 'current_selection',
+        read_filter: $customActionFilter ? $customActionFilter.value : 'all',
+        time_range: $customActionPeriod ? $customActionPeriod.value : 'today',
+        max_items: maxItems,
+        include_full_bodies: !!($customActionFullBodies && $customActionFullBodies.checked),
+        include_attachments: !!($customActionAttachments && $customActionAttachments.checked),
+        output: $customActionOutput ? $customActionOutput.value : 'chat',
+        allow_tools: false
+      }
+    });
+    closeCustomActionDialog();
+  }
+
+  function isTextEditingElement(node) {
+    if (!node || !node.tagName) return false;
+    var tag = String(node.tagName).toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select' || node.isContentEditable;
+  }
 
   // -- Public API --------------------------------------------------
   var api = {
@@ -664,12 +747,35 @@
       if (!$quickActions) return;
       var autoSubmit = !(options && options.autoSubmit === false);
       while ($quickActions.firstChild) $quickActions.removeChild($quickActions.firstChild);
+      setSelectedCustomAction(null);
+      if (options && options.allowCustomActionManagement) {
+        var add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'qa-chip qa-chip-add';
+        add.textContent = '+';
+        add.title = 'Добавить действие';
+        add.addEventListener('click', openCustomActionDialog);
+        $quickActions.appendChild(add);
+      }
       (chips || []).forEach(function(chip) {
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'qa-chip';
         btn.textContent = chip.label;
         btn.title = chip.prompt;
+        if (chip.type === 'custom_action') {
+          btn.className += ' qa-chip-custom';
+          btn.dataset.actionId = chip.id || '';
+          btn.addEventListener('mouseenter', function(evt) {
+            if (isCtrlDown || evt.ctrlKey) {
+              btn.classList.add('ctrl-hover');
+              setSelectedCustomAction(btn.dataset.actionId);
+            }
+          });
+          btn.addEventListener('mouseleave', function() {
+            btn.classList.remove('ctrl-hover');
+          });
+        }
         btn.addEventListener('click', function() {
           if (chip.type === 'custom_action' && chip.id) {
             postToHost({
@@ -772,12 +878,58 @@
   $btnCopy.addEventListener('click', function() {
     postToHost({ type: 'copy' });
   });
+  if ($btnCustomActionClose) $btnCustomActionClose.addEventListener('click', closeCustomActionDialog);
+  if ($btnCustomActionCancel) $btnCustomActionCancel.addEventListener('click', closeCustomActionDialog);
+  if ($btnCustomActionSave) $btnCustomActionSave.addEventListener('click', saveCustomActionFromDialog);
+  if ($customActionDialog) {
+    $customActionDialog.addEventListener('click', function(e) {
+      if (e.target === $customActionDialog) closeCustomActionDialog();
+    });
+  }
 
   // Enter sends, Shift+Enter inserts a newline (standard chat UX).
   $input.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendInput();
+    }
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Control') {
+      isCtrlDown = true;
+      if ($quickActions) {
+        var hovered = $quickActions.querySelector('.qa-chip-custom:hover');
+        if (hovered && hovered.dataset.actionId) {
+          hovered.classList.add('ctrl-hover');
+          setSelectedCustomAction(hovered.dataset.actionId);
+        }
+      }
+    }
+    if (e.key === 'Escape' && $customActionDialog && !$customActionDialog.hidden) {
+      e.preventDefault();
+      closeCustomActionDialog();
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Del') && selectedCustomActionId && !isTextEditingElement(e.target)) {
+      e.preventDefault();
+      postToHost({
+        type: 'custom_action_delete',
+        payload: { id: selectedCustomActionId }
+      });
+      setSelectedCustomAction(null);
+    }
+  });
+
+  document.addEventListener('keyup', function(e) {
+    if (e.key === 'Control') {
+      isCtrlDown = false;
+      if ($quickActions) {
+        var chips = $quickActions.querySelectorAll('.qa-chip-custom');
+        for (var i = 0; i < chips.length; i++) {
+          chips[i].classList.remove('ctrl-hover');
+        }
+      }
     }
   });
 

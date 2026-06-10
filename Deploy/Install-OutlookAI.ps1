@@ -349,13 +349,30 @@ Copy-Item -Path $appFilesDir -Destination $InstallPath -Recurse -Force
 $latestVersionDir = Get-ChildItem -Path (Join-Path $InstallPath "Application Files") -Directory |
     Sort-Object Name -Descending | Select-Object -First 1
 if ($latestVersionDir) {
-    Get-ChildItem -Path $latestVersionDir.FullName -Filter "*.deploy" | ForEach-Object {
-        $newName = $_.Name -replace '\.deploy$', ''
-        Copy-Item -Path $_.FullName -Destination (Join-Path $InstallPath $newName) -Force
+    Get-ChildItem -Path $latestVersionDir.FullName -Filter "*.deploy" -Recurse | ForEach-Object {
+        $relativePath = $_.FullName.Substring($latestVersionDir.FullName.Length).TrimStart('\')
+        $targetRelativePath = $relativePath -replace '\.deploy$', ''
+        $targetPath = Join-Path $InstallPath $targetRelativePath
+        $targetDir = Split-Path -Parent $targetPath
+        if (!(Test-Path $targetDir)) {
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        }
+        Copy-Item -Path $_.FullName -Destination $targetPath -Force
     }
     $manifestFile = Join-Path $latestVersionDir.FullName "OutlookAI.dll.manifest"
     if (Test-Path $manifestFile) {
         Copy-Item -Path $manifestFile -Destination $InstallPath -Force
+    }
+    foreach ($loader in @(
+        "runtimes\win-x86\native\WebView2Loader.dll",
+        "runtimes\win-x64\native\WebView2Loader.dll"
+    )) {
+        $loaderPath = Join-Path $InstallPath $loader
+        if (Test-Path $loaderPath) {
+            Write-Host "  Staged $loader" -ForegroundColor Gray
+        } else {
+            Write-Host "  WARN: missing $loader" -ForegroundColor Yellow
+        }
     }
 }
 Write-Host "  Done." -ForegroundColor Green

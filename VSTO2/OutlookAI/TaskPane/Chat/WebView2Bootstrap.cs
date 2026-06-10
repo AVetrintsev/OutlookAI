@@ -37,6 +37,7 @@ namespace OutlookAI.TaskPane.Chat
         public static string WebUiFolder => Path.Combine(LocalAppDataRoot, "WebUI");
         public static string WebView2DataFolder => Path.Combine(LocalAppDataRoot, "WebView2Data");
         public static string PdfWebView2DataFolder => Path.Combine(LocalAppDataRoot, "WebView2PdfData");
+        private static bool _loaderFolderConfigured;
 
         /// <summary>
         /// Initialize a WebView2 control, extract embedded WebUI resources,
@@ -53,6 +54,7 @@ namespace OutlookAI.TaskPane.Chat
             TraceLog.Write("Folders ensured", "WebView2Bootstrap");
             ExtractEmbeddedWebUi();
             TraceLog.Write("Embedded WebUI extracted", "WebView2Bootstrap");
+            ConfigureLoaderFolder();
 
             TraceLog.Write(">> CoreWebView2Environment.CreateAsync", "WebView2Bootstrap");
             var env = await CoreWebView2Environment.CreateAsync(
@@ -84,13 +86,79 @@ namespace OutlookAI.TaskPane.Chat
         {
             try
             {
+                ConfigureLoaderFolder();
                 var version = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                TraceLog.Write("WebView2 runtime version detected: " + version, "WebView2Bootstrap");
                 return !string.IsNullOrEmpty(version);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                TraceLog.Write("WebView2 runtime detection failed: " + ex, "WebView2Bootstrap");
                 return false;
             }
+        }
+
+        private static void ConfigureLoaderFolder()
+        {
+            if (_loaderFolderConfigured)
+            {
+                return;
+            }
+
+            var loaderFolder = ResolveLoaderFolder();
+            if (string.IsNullOrEmpty(loaderFolder))
+            {
+                TraceLog.Write("WebView2Loader.dll folder was not found.", "WebView2Bootstrap");
+                return;
+            }
+
+            try
+            {
+                CoreWebView2Environment.SetLoaderDllFolderPath(loaderFolder);
+                _loaderFolderConfigured = true;
+                TraceLog.Write("WebView2 loader folder set to " + loaderFolder, "WebView2Bootstrap");
+            }
+            catch (InvalidOperationException ex)
+            {
+                _loaderFolderConfigured = true;
+                TraceLog.Write("WebView2 loader folder was already set or loaded: " + ex.Message, "WebView2Bootstrap");
+            }
+            catch (Exception ex)
+            {
+                TraceLog.Write("Failed to set WebView2 loader folder '" + loaderFolder + "': " + ex, "WebView2Bootstrap");
+            }
+        }
+
+        private static string ResolveLoaderFolder()
+        {
+            var runtime = Environment.Is64BitProcess ? "win-x64" : "win-x86";
+            var relative = Path.Combine("runtimes", runtime, "native");
+            var candidates = new[]
+            {
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, relative),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "OutlookAI", relative),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "OutlookAI", relative),
+                Path.Combine(Environment.GetEnvironmentVariable("ProgramW6432") ?? "", "OutlookAI", relative),
+                Path.Combine(Environment.GetEnvironmentVariable("ProgramFiles") ?? "", "OutlookAI", relative),
+                Path.Combine(Environment.GetEnvironmentVariable("ProgramFiles(x86)") ?? "", "OutlookAI", relative)
+            };
+
+            foreach (var candidate in candidates)
+            {
+                try
+                {
+                    if (File.Exists(Path.Combine(candidate, "WebView2Loader.dll")))
+                    {
+                        return candidate;
+                    }
+                }
+                catch
+                {
+                    // Ignore malformed environment paths.
+                }
+            }
+
+            return null;
         }
 
         private static void EnsureFolders()

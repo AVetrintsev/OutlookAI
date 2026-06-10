@@ -394,7 +394,6 @@ namespace OutlookAI.Services
             var body = BuildBaseChatBody(messages, stream: true);
             body["tools"] = ToolCatalogSchema.BuildChatCompletionsToolsArray(context.IncludeWriteTools);
             body["tool_choice"] = "auto";
-            body["parallel_tool_calls"] = true;
             AddReasoningEffort(body, context.ReasoningEffortOverride);
             return body;
         }

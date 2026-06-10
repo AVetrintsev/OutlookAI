@@ -47,7 +47,7 @@ namespace OutlookAI.Tests.Services
                 Assert.Equal(2, ctx.History.Count);
                 Assert.Contains("\"tools\":[", fake.RequestBodies[0]);
                 Assert.Contains("\"function\":{\"name\":\"outlook_get_current_compose_state\"", fake.RequestBodies[0]);
-                Assert.Contains("\"parallel_tool_calls\":true", fake.RequestBodies[0]);
+                Assert.DoesNotContain("parallel_tool_calls", fake.RequestBodies[0]);
             }
         }
 

@@ -297,7 +297,7 @@ $details
 
     # Defensive: fail loudly if something we expect downstream isn't there,
     # rather than shipping a broken ZIP.
-    foreach ($required in @("OutlookAI.vsto","Application Files","Install-OutlookAI.ps1","version.json")) {
+    foreach ($required in @("OutlookAI.vsto","Application Files","Install-OutlookAI.ps1","MicrosoftEdgeWebView2Setup.exe","version.json")) {
         if (-not (Test-Path -LiteralPath (Join-Path $staging $required))) {
             throw "Staging is missing required artifact: $required"
         }

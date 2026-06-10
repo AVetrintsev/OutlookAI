@@ -29,7 +29,13 @@ namespace OutlookAI.Services
         }
 
         public static string TranscriptionsEndpoint
-            => Config.NormalizeBaseUrl(Config.LiteLlmBaseUrl) + "/audio/transcriptions";
+        {
+            get
+            {
+                Config.EnsureLiteLlmServerConfigured();
+                return Config.NormalizeBaseUrl(Config.LiteLlmBaseUrl) + "/audio/transcriptions";
+            }
+        }
 
         private static HttpClient BuildDefaultHttpClient()
         {

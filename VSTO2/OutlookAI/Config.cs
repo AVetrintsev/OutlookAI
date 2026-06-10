@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
+using OutlookAI.Diagnostics;
 
 namespace OutlookAI
 {
@@ -69,6 +70,24 @@ namespace OutlookAI
             return AvailableReasoningEfforts;
         }
 
+        public static bool IsUsingPlaceholderLiteLlmEndpoint()
+        {
+            return string.Equals(
+                NormalizeBaseUrl(LiteLlmBaseUrl),
+                NormalizeBaseUrl(DefaultLiteLlmBaseUrl),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static void EnsureLiteLlmServerConfigured()
+        {
+            if (IsUsingPlaceholderLiteLlmEndpoint())
+            {
+                throw new InvalidOperationException(
+                    "Серверная конфигурация LiteLLM не установлена. "
+                    + "Переустановите OutlookAI через installer и укажите LiteLLM base URL, например http://localhost:4000/v1, и модель, например local-model.");
+            }
+        }
+
         private static readonly string[] GlobalConfigFilePaths = BuildGlobalConfigFilePaths();
 
         private static readonly string UserConfigFilePath = Path.Combine(
@@ -105,8 +124,9 @@ namespace OutlookAI
             {
                 LoadFromFile(globalConfigPath, allowServerFields: true, allowApiKey: false);
             }
-            LoadFromFile(sharedConfigPath, allowServerFields: false, allowApiKey: false);
+            LoadFromFile(sharedConfigPath, allowServerFields: true, allowApiKey: false);
             LoadFromFile(userConfigPath, allowServerFields: false, allowApiKey: true);
+            TraceEffectiveConfig(globalConfigPaths, sharedConfigPath, userConfigPath);
         }
 
         public static void LoadConfigFromPaths(string globalConfigPath, string userConfigPath)
@@ -140,45 +160,11 @@ namespace OutlookAI
                 }
             }
 
-            void AddExactPath(string path)
-            {
-                if (string.IsNullOrWhiteSpace(path))
-                {
-                    return;
-                }
-
-                try
-                {
-                    if (seen.Add(path))
-                    {
-                        paths.Add(path);
-                    }
-                }
-                catch
-                {
-                    // Ignore malformed paths.
-                }
-            }
-
             AddConfigPath(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86));
             AddConfigPath(Environment.GetEnvironmentVariable("ProgramFiles(x86)"));
             AddConfigPath(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
             AddConfigPath(Environment.GetEnvironmentVariable("ProgramW6432"));
             AddConfigPath(Environment.GetEnvironmentVariable("ProgramFiles"));
-
-            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            AddExactPath(Path.Combine(baseDir, "config.xml"));
-            try
-            {
-                var parent = Directory.GetParent(baseDir);
-                AddExactPath(parent == null ? null : Path.Combine(parent.FullName, "config.xml"));
-                var grandparent = parent == null ? null : parent.Parent;
-                AddExactPath(grandparent == null ? null : Path.Combine(grandparent.FullName, "config.xml"));
-            }
-            catch
-            {
-                // BaseDirectory may be unavailable in unusual hosts.
-            }
 
             return paths.ToArray();
         }
@@ -317,6 +303,37 @@ namespace OutlookAI
             }
         }
 
+        private static void TraceEffectiveConfig(IEnumerable<string> globalConfigPaths, string sharedConfigPath, string userConfigPath)
+        {
+            try
+            {
+                var machinePaths = string.Join("; ",
+                    (globalConfigPaths ?? Enumerable.Empty<string>())
+                        .Where(path => !string.IsNullOrWhiteSpace(path))
+                        .Select(path => path + (File.Exists(path) ? " [found]" : " [missing]")));
+                var sharedState = string.IsNullOrWhiteSpace(sharedConfigPath)
+                    ? "<none>"
+                    : sharedConfigPath + (File.Exists(sharedConfigPath) ? " [found]" : " [missing]");
+                var userState = string.IsNullOrWhiteSpace(userConfigPath)
+                    ? "<none>"
+                    : userConfigPath + (File.Exists(userConfigPath) ? " [found]" : " [missing]");
+
+                TraceLog.Write(
+                    "Config loaded. MachinePaths=" + machinePaths
+                    + "; SharedPath=" + sharedState
+                    + "; UserPath=" + userState
+                    + "; LiteLlmBaseUrl=" + NormalizeBaseUrl(LiteLlmBaseUrl)
+                    + "; Model=" + Model
+                    + "; VoiceModel=" + (string.IsNullOrWhiteSpace(VoiceModel) ? "<disabled>" : VoiceModel)
+                    + "; ApiKeyConfigured=" + (!string.IsNullOrWhiteSpace(LiteLlmApiKey)),
+                    "Config");
+            }
+            catch
+            {
+                // Diagnostics must not affect startup.
+            }
+        }
+
         public static void SaveConfig()
         {
             var userDoc = new XDocument(
@@ -330,18 +347,7 @@ namespace OutlookAI
                 )
             );
 
-            var sharedDoc = new XDocument(
-                new XElement("Config",
-                    new XElement("AdminPassword", AdminPassword),
-                    new XElement("ReasoningEffort", ReasoningEffort),
-                    new XElement("WriteToolsEnabled", WriteToolsEnabled),
-                    new XElement("EnabledWriteTools",
-                        string.Join(",", EnabledWriteTools ?? new HashSet<string>()))
-                )
-            );
-
             TrySaveTo(UserConfigFilePath, userDoc);
-            TrySaveTo(SharedConfigFilePath, sharedDoc);
         }
 
         public static string NormalizeBaseUrl(string raw)

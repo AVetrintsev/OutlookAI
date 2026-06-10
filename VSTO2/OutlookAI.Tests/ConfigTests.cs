@@ -73,6 +73,31 @@ namespace OutlookAI.Tests
             Assert.Equal("ollama/qwen2.5:3b", Config.Model);
         }
 
+        [Fact]
+        public void LoadConfigFromPaths_AppliesServerDefaultsFromSharedConfig()
+        {
+            var g = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".xml");
+            var s = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".xml");
+            var u = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".xml");
+
+            File.WriteAllText(s, "<Config>"
+                + "<LiteLlmBaseUrl>http://localhost:11434</LiteLlmBaseUrl>"
+                + "<Model>ollama/qwen2.5:3b</Model>"
+                + "</Config>");
+
+            try
+            {
+                Config.LoadConfigFromPaths(g, s, u);
+
+                Assert.Equal("http://localhost:11434/v1", Config.LiteLlmBaseUrl);
+                Assert.Equal("ollama/qwen2.5:3b", Config.Model);
+            }
+            finally
+            {
+                if (File.Exists(s)) File.Delete(s);
+            }
+        }
+
         [Theory]
         [InlineData("http://localhost:11434", "http://localhost:11434/v1")]
         [InlineData("http://localhost:11434/", "http://localhost:11434/v1")]

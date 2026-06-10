@@ -322,8 +322,14 @@
     <Compile Include="Services\Chat\ConversationStore.cs" />
     <Compile Include="Services\Chat\StopReason.cs" />
     <Compile Include="Services\Chat\TurnResult.cs" />
+    <Compile Include="Services\ActionCatalog.cs" />
+    <Compile Include="Services\CustomActions\CustomActionDefinition.cs" />
+    <Compile Include="Services\CustomActions\CustomActionRunner.cs" />
+    <Compile Include="Services\CustomActions\CustomActionStateStore.cs" />
+    <Compile Include="Services\CustomActions\CustomActionStore.cs" />
     <Compile Include="Services\LiteLlmCredentialService.cs" />
     <Compile Include="Services\LiteLlmChatService.cs" />
+    <Compile Include="Services\ManifestPathResolver.cs" />
     <Compile Include="Services\Export\ExcelCellCoercer.cs" />
     <Compile Include="Services\Export\ExcelColumnSpec.cs" />
     <Compile Include="Services\Export\ExcelColumnType.cs" />
@@ -388,6 +394,8 @@
     <Compile Include="Services\Tools\OutlookSetCategoryTool.cs" />
     <Compile Include="Services\Tools\ToolArgValidationException.cs" />
     <Compile Include="Services\Tools\ToolCatalogSchema.cs" />
+    <Compile Include="Services\Tools\ToolManifestCatalog.cs" />
+    <Compile Include="Services\PromptCatalog.cs" />
     <Compile Include="Services\Updates\DownloadResult.cs" />
     <Compile Include="Services\Updates\GitHubReleaseClient.cs" />
     <Compile Include="Services\Updates\LaunchResult.cs" />
@@ -468,6 +476,15 @@
     <EmbeddedResource Include="WebUI\chat.js">
       <LogicalName>OutlookAI.WebUI.chat.js</LogicalName>
     </EmbeddedResource>
+    <Content Include="Prompts\builtin-actions.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Prompts\builtin-prompts.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Prompts\tool-catalog.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>

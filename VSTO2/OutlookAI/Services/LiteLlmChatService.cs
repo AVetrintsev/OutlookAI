@@ -211,6 +211,8 @@ namespace OutlookAI.Services
             CancellationToken cancellationToken)
         {
             var callsByIndex = new Dictionary<int, JObject>();
+            var bufferedText = new StringBuilder();
+            var bufferingPotentialTextToolCall = true;
 
             using (var reader = new StreamReader(stream, Encoding.UTF8))
             {
@@ -248,7 +250,20 @@ namespace OutlookAI.Services
                     if (!string.IsNullOrEmpty(content))
                     {
                         assistantText.Append(content);
-                        sink.OnTokenDelta(content);
+                        if (bufferingPotentialTextToolCall)
+                        {
+                            bufferedText.Append(content);
+                            if (!CouldStillBeTextToolCall(bufferedText.ToString()))
+                            {
+                                sink.OnTokenDelta(bufferedText.ToString());
+                                bufferedText.Clear();
+                                bufferingPotentialTextToolCall = false;
+                            }
+                        }
+                        else
+                        {
+                            sink.OnTokenDelta(content);
+                        }
                     }
 
                     var toolCalls = delta["tool_calls"] as JArray;
@@ -302,6 +317,32 @@ namespace OutlookAI.Services
                 .Where(call => !string.IsNullOrEmpty((string)call["name"]))
                 .ToList();
 
+            if (calls.Count == 0 && TryParseTextToolCalls(assistantText.ToString(), out var textCalls))
+            {
+                assistantText.Clear();
+                bufferedText.Clear();
+                calls = textCalls;
+            }
+            else if (calls.Count == 0 && TryUnwrapStructuredAssistantText(assistantText.ToString(), out var unwrappedText))
+            {
+                assistantText.Clear();
+                assistantText.Append(unwrappedText);
+                bufferedText.Clear();
+                sink.OnTokenDelta(unwrappedText);
+            }
+            else if (calls.Count == 0 && TryBuildFallbackFromRawToolJson(assistantText.ToString(), out var fallbackText))
+            {
+                assistantText.Clear();
+                assistantText.Append(fallbackText);
+                bufferedText.Clear();
+                sink.OnTokenDelta(fallbackText);
+            }
+            else if (bufferedText.Length > 0)
+            {
+                sink.OnTokenDelta(bufferedText.ToString());
+                bufferedText.Clear();
+            }
+
             foreach (var call in calls)
             {
                 var callId = (string)call["call_id"];
@@ -314,6 +355,442 @@ namespace OutlookAI.Services
             }
 
             return calls;
+        }
+
+        private static bool CouldStillBeTextToolCall(string text)
+        {
+            var trimmed = (text ?? "").TrimStart();
+            if (trimmed.Length == 0)
+            {
+                return true;
+            }
+
+            if (trimmed.StartsWith("{", StringComparison.Ordinal)
+                || trimmed.StartsWith("[", StringComparison.Ordinal)
+                || trimmed.StartsWith("```", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (trimmed.Equals("PDF", StringComparison.OrdinalIgnoreCase)
+                || trimmed.Equals("JSON", StringComparison.OrdinalIgnoreCase)
+                || trimmed.Equals("Tool", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (trimmed.StartsWith("PDF", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("JSON", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("Tool", StringComparison.OrdinalIgnoreCase))
+            {
+                var afterFirstLine = trimmed.Split(new[] { '\r', '\n' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                return afterFirstLine.Length == 1
+                    || afterFirstLine[1].TrimStart().StartsWith("{", StringComparison.Ordinal)
+                    || afterFirstLine[1].TrimStart().StartsWith("```", StringComparison.Ordinal);
+            }
+
+            return false;
+        }
+
+        internal static bool TryParseTextToolCalls(string text, out List<JObject> calls)
+        {
+            calls = new List<JObject>();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            foreach (var candidate in EnumerateJsonCandidates(text))
+            {
+                try
+                {
+                    var token = JToken.Parse(candidate);
+                    if (TryConvertTextToolToken(token, out var parsedCalls))
+                    {
+                        calls = parsedCalls;
+                        return calls.Count > 0;
+                    }
+                }
+                catch
+                {
+                    // Keep scanning; small local models often wrap JSON in labels.
+                }
+            }
+
+            return false;
+        }
+
+        internal static bool TryUnwrapStructuredAssistantText(string text, out string unwrappedText)
+        {
+            unwrappedText = "";
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            foreach (var candidate in EnumerateJsonCandidates(text))
+            {
+                try
+                {
+                    var obj = JToken.Parse(candidate) as JObject;
+                    if (obj == null || obj["messages"] != null || obj["body_plaintext"] != null)
+                    {
+                        continue;
+                    }
+
+                    var knownText = (string)obj["answer"]
+                        ?? (string)obj["response"]
+                        ?? (string)obj["text"]
+                        ?? (string)obj["summary"]
+                        ?? (string)obj["content"];
+                    if (!string.IsNullOrWhiteSpace(knownText))
+                    {
+                        unwrappedText = knownText.Trim();
+                        return true;
+                    }
+
+                    var stringProperties = obj.Properties()
+                        .Where(p => p.Value.Type == JTokenType.String)
+                        .ToList();
+                    if (stringProperties.Count == 1)
+                    {
+                        var key = stringProperties[0].Name.Trim();
+                        var value = ((string)stringProperties[0].Value ?? "").Trim();
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            unwrappedText = value;
+                            return true;
+                        }
+                        if (!string.IsNullOrWhiteSpace(key))
+                        {
+                            unwrappedText = key;
+                            return true;
+                        }
+                    }
+
+                    if (stringProperties.Count > 1)
+                    {
+                        var values = stringProperties
+                            .Select(p => ((string)p.Value ?? "").Trim())
+                            .Where(v => !string.IsNullOrWhiteSpace(v))
+                            .Distinct(StringComparer.Ordinal)
+                            .ToList();
+                        if (values.Count == 1)
+                        {
+                            unwrappedText = values[0];
+                            return true;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Keep scanning; local models often prepend labels like "PDF".
+                }
+            }
+
+            return false;
+        }
+
+        internal static bool TryBuildFallbackFromRawToolJson(string text, out string fallbackText)
+        {
+            fallbackText = "";
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            foreach (var candidate in EnumerateJsonCandidates(text))
+            {
+                try
+                {
+                    var token = JToken.Parse(candidate);
+                    if (TrySummarizeOutlookToolResult(token, out fallbackText))
+                    {
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // Keep scanning; local models often prepend labels like "PDF".
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TrySummarizeOutlookToolResult(JToken token, out string summary)
+        {
+            summary = "";
+            var obj = token as JObject;
+            if (obj == null)
+            {
+                return false;
+            }
+
+            var messages = obj["messages"] as JArray;
+            if (messages != null)
+            {
+                summary = SummarizeMessagesResult(obj, messages);
+                return !string.IsNullOrWhiteSpace(summary);
+            }
+
+            if (obj["body_plaintext"] != null || obj["subject"] != null)
+            {
+                summary = SummarizeMessagesResult(
+                    new JObject(new JProperty("count", 1)),
+                    new JArray(obj));
+                return !string.IsNullOrWhiteSpace(summary);
+            }
+
+            return false;
+        }
+
+        private static string SummarizeMessagesResult(JObject root, JArray messages)
+        {
+            var count = (int?)root["count"] ?? messages.Count;
+            var sb = new StringBuilder();
+            sb.AppendLine("Сводка выбранной переписки");
+            sb.AppendLine();
+            sb.AppendLine("Найдено сообщений: " + count + ".");
+
+            var first = messages.OfType<JObject>().FirstOrDefault();
+            if (first == null)
+            {
+                return sb.ToString().Trim();
+            }
+
+            var subject = CleanInline((string)first["subject"]);
+            var from = CleanInline((string)first["from"]);
+            var received = CleanInline((string)first["received_at"]);
+            var body = CleanBody((string)first["body_plaintext"] ?? (string)first["snippet"]);
+
+            if (!string.IsNullOrWhiteSpace(subject))
+            {
+                sb.AppendLine("Тема: " + subject);
+            }
+            if (!string.IsNullOrWhiteSpace(from))
+            {
+                sb.AppendLine("Отправитель: " + from);
+            }
+            if (!string.IsNullOrWhiteSpace(received))
+            {
+                sb.AppendLine("Дата: " + received);
+            }
+
+            if (!string.IsNullOrWhiteSpace(body))
+            {
+                sb.AppendLine();
+                sb.AppendLine("Кратко:");
+                foreach (var sentence in TakeSummarySentences(body, maxSentences: 4))
+                {
+                    sb.AppendLine("- " + sentence);
+                }
+            }
+
+            if (messages.Count > 1)
+            {
+                sb.AppendLine();
+                sb.AppendLine("В переписке несколько сообщений; выше приведена сводка первого выбранного сообщения.");
+            }
+
+            return sb.ToString().Trim();
+        }
+
+        private static IEnumerable<string> TakeSummarySentences(string text, int maxSentences)
+        {
+            var normalized = CleanBody(text);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                yield break;
+            }
+
+            var sentences = normalized
+                .Split(new[] { ". ", "! ", "? ", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim().Trim('.', '!', '?'))
+                .Where(x => x.Length > 0)
+                .Take(maxSentences);
+
+            foreach (var sentence in sentences)
+            {
+                yield return sentence.Length <= 260 ? sentence : sentence.Substring(0, 260).TrimEnd() + "...";
+            }
+        }
+
+        private static string CleanBody(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return "";
+            }
+
+            var normalized = text
+                .Replace("\r", "\n")
+                .Replace("\t", " ");
+            while (normalized.Contains("\n\n\n"))
+            {
+                normalized = normalized.Replace("\n\n\n", "\n\n");
+            }
+            while (normalized.Contains("  "))
+            {
+                normalized = normalized.Replace("  ", " ");
+            }
+            return normalized.Trim();
+        }
+
+        private static string CleanInline(string text)
+        {
+            return string.IsNullOrWhiteSpace(text)
+                ? ""
+                : text.Replace("\r", " ").Replace("\n", " ").Trim();
+        }
+
+        private static IEnumerable<string> EnumerateJsonCandidates(string text)
+        {
+            var trimmed = (text ?? "").Trim();
+            if (trimmed.StartsWith("```", StringComparison.Ordinal))
+            {
+                var firstNewline = trimmed.IndexOf('\n');
+                var lastFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
+                if (firstNewline >= 0 && lastFence > firstNewline)
+                {
+                    yield return trimmed.Substring(firstNewline + 1, lastFence - firstNewline - 1).Trim();
+                }
+            }
+
+            yield return trimmed;
+
+            for (int start = 0; start < text.Length; start++)
+            {
+                if (text[start] != '{' && text[start] != '[')
+                {
+                    continue;
+                }
+
+                var candidate = TryReadBalancedJson(text, start);
+                if (!string.IsNullOrEmpty(candidate))
+                {
+                    yield return candidate;
+                }
+            }
+        }
+
+        private static string TryReadBalancedJson(string text, int start)
+        {
+            var depth = 0;
+            var inString = false;
+            var escaped = false;
+            for (int i = start; i < text.Length; i++)
+            {
+                var ch = text[i];
+                if (inString)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (ch == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (ch == '"')
+                    {
+                        inString = false;
+                    }
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    inString = true;
+                }
+                else if (ch == '{' || ch == '[')
+                {
+                    depth++;
+                }
+                else if (ch == '}' || ch == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        return text.Substring(start, i - start + 1);
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static bool TryConvertTextToolToken(JToken token, out List<JObject> calls)
+        {
+            calls = new List<JObject>();
+            var arr = token as JArray;
+            if (arr != null)
+            {
+                foreach (var item in arr)
+                {
+                    if (!TryConvertTextToolObject(item as JObject, out var call))
+                    {
+                        return false;
+                    }
+                    calls.Add(call);
+                }
+                return calls.Count > 0;
+            }
+
+            if (TryConvertTextToolObject(token as JObject, out var singleCall))
+            {
+                calls.Add(singleCall);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryConvertTextToolObject(JObject obj, out JObject call)
+        {
+            call = null;
+            if (obj == null)
+            {
+                return false;
+            }
+
+            var functionObject = obj["function"] as JObject;
+            var name = (string)obj["function"]
+                ?? (string)obj["name"]
+                ?? (string)obj["tool"]
+                ?? (string)functionObject?["name"];
+
+            if (string.IsNullOrWhiteSpace(name) || !name.StartsWith("outlook_", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var argsToken = obj["parameters"]
+                ?? obj["arguments"]
+                ?? obj["args"]
+                ?? functionObject?["arguments"]
+                ?? new JObject();
+
+            string args;
+            if (argsToken.Type == JTokenType.String)
+            {
+                args = ((string)argsToken) ?? "{}";
+                if (string.IsNullOrWhiteSpace(args))
+                {
+                    args = "{}";
+                }
+            }
+            else
+            {
+                args = argsToken.ToString(Newtonsoft.Json.Formatting.None);
+            }
+
+            call = new JObject(
+                new JProperty("type", "function_call"),
+                new JProperty("call_id", "call_" + Guid.NewGuid().ToString("N")),
+                new JProperty("name", name.Trim()),
+                new JProperty("arguments", args));
+            return true;
         }
 
         private static async Task<DispatchedCall> DispatchOneAsync(
@@ -444,6 +921,11 @@ namespace OutlookAI.Services
                         new JProperty("role", "tool"),
                         new JProperty("tool_call_id", (string)item["call_id"] ?? ""),
                         new JProperty("content", (string)item["output"] ?? "{}")));
+                    messages.Add(new JObject(
+                        new JProperty("role", "user"),
+                        new JProperty("content",
+                            "Используй результат инструмента выше, чтобы ответить на исходный запрос пользователя. "
+                            + "Не повторяй JSON и не показывай служебные поля. Если пользователь просил PDF или отчет, сначала подготовь понятный текст/markdown, затем при необходимости вызови подходящий export-инструмент.")));
                 }
             }
 
@@ -485,6 +967,25 @@ namespace OutlookAI.Services
                 new JObject(
                     new JProperty("role", "user"),
                     new JProperty("content", BuildUserMessage(action, emailContent, customPrompt ?? ""))));
+            var body = BuildBaseChatBody(messages, stream: true);
+
+            var output = new StringBuilder();
+            await SendChatCompletionAsync(body, output, new ChatEventSink(), cancellationToken).ConfigureAwait(false);
+            return output.ToString().Trim();
+        }
+
+        public async Task<string> CompleteWithoutToolsAsync(
+            string systemInstructions,
+            string userMessage,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var messages = new JArray(
+                new JObject(
+                    new JProperty("role", "system"),
+                    new JProperty("content", systemInstructions ?? "")),
+                new JObject(
+                    new JProperty("role", "user"),
+                    new JProperty("content", userMessage ?? "")));
             var body = BuildBaseChatBody(messages, stream: true);
 
             var output = new StringBuilder();
@@ -547,26 +1048,12 @@ namespace OutlookAI.Services
 
         public static string GetSystemPrompt(ActionType action)
         {
-            switch (action)
-            {
-                case ActionType.Proofread:
-                    return "You are a professional editor. Review the email for grammar, spelling, punctuation, and clarity issues. Return the corrected email text only. Do not add any explanations.";
-                case ActionType.Revise:
-                    return "You are a professional writing assistant. Improve the email clarity, flow, and impact. Return only the revised email text without any explanations.";
-                case ActionType.Draft:
-                    return "You are a professional email writer. Write a clear, professional email based on the instructions. If replying to an email thread, write only your reply - do not include the previous messages. Return only the email text you are composing.";
-                case ActionType.Shorten:
-                    return "You are a professional editor. Condense this email to be more concise while keeping essential information. Return only the shortened email text.";
-                case ActionType.Lengthen:
-                    return "You are a professional writer. Expand this email with more detail while maintaining professionalism. Return only the expanded email text.";
-                case ActionType.Formal:
-                    return "You are a professional editor. Rewrite this email in a more formal tone suitable for business. Return only the rewritten email text.";
-                case ActionType.Friendly:
-                    return "You are a professional editor. Rewrite this email in a warmer, friendlier tone while remaining professional. Return only the rewritten email text.";
-                case ActionType.Custom:
-                default:
-                    return "You are a professional email writing assistant. Help the user with their email based on their instructions. Return only the result.";
-            }
+            return PromptCatalog.Default.Get(ActionPromptId(action));
+        }
+
+        private static string ActionPromptId(ActionType action)
+        {
+            return action.ToString().ToLowerInvariant();
         }
 
         public static string BuildUserMessage(ActionType action, string emailContent, string customPrompt)

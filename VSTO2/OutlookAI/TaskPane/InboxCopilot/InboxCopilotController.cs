@@ -8,11 +8,13 @@ using Microsoft.Web.WebView2.WinForms;
 using Newtonsoft.Json.Linq;
 using OutlookAI.Diagnostics;
 using OutlookAI.Services;
+using OutlookAI.Services.CustomActions;
 using OutlookAI.Services.Export;
 using OutlookAI.Services.Chat;
 using OutlookAI.Services.Tools;
 using OutlookAI.TaskPane.Chat;
 using Outlook = Microsoft.Office.Interop.Outlook;
+using System.Linq;
 
 namespace OutlookAI.TaskPane.InboxCopilot
 {
@@ -31,6 +33,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
         private readonly ConversationStore _store;
         private readonly Outlook.Explorer _explorer;
         private readonly ExportBridge _exportBridge;
+        private readonly CustomActionStore _customActionStore = new CustomActionStore();
 
         private WebView2 _webView;
         private CancellationTokenSource _activeCts;
@@ -157,6 +160,9 @@ namespace OutlookAI.TaskPane.InboxCopilot
                             (string)payload?["text"] ?? "",
                             (string)payload?["reasoning"]);
                         break;
+                    case "custom_action":
+                        _ = StartCustomActionAsync((string)payload?["id"] ?? "");
+                        break;
                     case "stop":
                         try { _activeCts?.Cancel(); } catch { }
                         break;
@@ -253,6 +259,14 @@ namespace OutlookAI.TaskPane.InboxCopilot
                         new JProperty("label", c.Label),
                         new JProperty("prompt", c.Prompt)));
                 }
+                foreach (var custom in _customActionStore.Load())
+                {
+                    chipsArr.Add(new JObject(
+                        new JProperty("id", custom.Id),
+                        new JProperty("type", "custom_action"),
+                        new JProperty("label", custom.Title),
+                        new JProperty("prompt", custom.Description ?? custom.Prompt ?? "")));
+                }
                 _ = RunScript("outlookai.setQuickActions(" +
                     chipsArr.ToString(Newtonsoft.Json.Formatting.None) + ");");
             }
@@ -344,6 +358,66 @@ namespace OutlookAI.TaskPane.InboxCopilot
             {
                 TraceLog.Write("BuildSystemInstructions error: " + ex, "InboxCopilot");
                 return "You are the Outlook Inbox Copilot. Help the user with their mailbox.";
+            }
+        }
+
+        private async Task StartCustomActionAsync(string actionId)
+        {
+            TraceLog.Write(">> StartCustomActionAsync id=" + actionId, "InboxCopilot");
+            if (_turnInFlight || string.IsNullOrWhiteSpace(actionId) || !_isReady || _surface == null)
+            {
+                TraceLog.Write("StartCustomActionAsync aborted (gate)", "InboxCopilot");
+                return;
+            }
+
+            var action = _customActionStore.Load()
+                .FirstOrDefault(a => string.Equals(a.Id, actionId, StringComparison.OrdinalIgnoreCase));
+            if (action == null)
+            {
+                await RunScript("outlookai.showError(" + JsString("Пользовательское действие не найдено.") + ");");
+                return;
+            }
+
+            _turnInFlight = true;
+            _activeCts = new CancellationTokenSource();
+            await RunScript("outlookai.appendUserMessage(" + JsString(action.Title) + ");");
+            await RunScript("outlookai.setComposerEnabled(false, true);");
+            var assistantId = "asst_" + (++_nextMessageId);
+            await RunScript("outlookai.appendAssistantMessage(" + JsString(assistantId) + ", '');");
+
+            try
+            {
+                var runner = new CustomActionRunner(_chat, _surface);
+                var result = await runner.RunAsync(action, _activeCts.Token).ConfigureAwait(false);
+                await RunScript("outlookai.appendTextDelta(" +
+                    JsString(assistantId) + ", " + JsString(result.Text ?? "") + ");");
+                if (!string.IsNullOrWhiteSpace(result.FilePath))
+                {
+                    var fileInfo = new JObject(
+                        new JProperty("path", result.FilePath),
+                        new JProperty("format", action.Output == "export_pdf" ? "pdf" : "file"));
+                    await RunScript("outlookai.onFileSaved(" +
+                        JsString(assistantId) + ", " + fileInfo.ToString(Newtonsoft.Json.Formatting.None) + ");");
+                }
+                await RunScript("outlookai.finalizeAssistantMessage(" + JsString(assistantId) + ", {});");
+            }
+            catch (OperationCanceledException)
+            {
+                await RunScript("outlookai.finalizeAssistantMessage(" + JsString(assistantId) + ", {stopped:true});");
+            }
+            catch (Exception ex)
+            {
+                TraceLog.Write("StartCustomActionAsync EXCEPTION: " + ex, "InboxCopilot");
+                await RunScript("outlookai.showError(" + JsString(FormatTurnError(ex)) + ");");
+                await RunScript("outlookai.finalizeAssistantMessage(" + JsString(assistantId) + ", {error:true});");
+            }
+            finally
+            {
+                _turnInFlight = false;
+                _activeCts?.Dispose();
+                _activeCts = null;
+                await RunScript("outlookai.setComposerEnabled(true, false);");
+                TraceLog.Write("<< StartCustomActionAsync", "InboxCopilot");
             }
         }
 

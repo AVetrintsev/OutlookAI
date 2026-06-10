@@ -19,7 +19,7 @@
      C# calls these via WebView2.ExecuteScriptAsync("outlookai.X(...)").
    JS -> Host:
      window.chrome.webview.postMessage(JSON.stringify({type:..., payload:...}))
-      Message types: 'send', 'stop', 'clear', 'copy', 'toolCardClicked',
+      Message types: 'send', 'custom_action', 'stop', 'clear', 'copy', 'toolCardClicked',
                      'open_file', 'reveal_in_explorer', 'export_pdf'
    ============================================================ */
 
@@ -648,7 +648,8 @@
 
     /**
      * Render the row of quick-action chips above the composer. Each chip
-     * is { label, prompt }. Clicking a chip pre-fills the textarea with
+     * is { label, prompt, id?, type? }. Clicking a custom-action chip
+     * posts custom_action; regular chips pre-fill the textarea with
      * the prompt and (by default) immediately sends - the Phase 3a
      * InboxCopilot behavior.
      *
@@ -670,6 +671,15 @@
         btn.textContent = chip.label;
         btn.title = chip.prompt;
         btn.addEventListener('click', function() {
+          if (chip.type === 'custom_action' && chip.id) {
+            postToHost({
+              type: 'custom_action',
+              payload: {
+                id: chip.id
+              }
+            });
+            return;
+          }
           $input.value = chip.prompt;
           if (autoSubmit) {
             sendInput();

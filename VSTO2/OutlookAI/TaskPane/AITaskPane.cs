@@ -457,16 +457,10 @@ namespace OutlookAI.TaskPane
                 emailContent = emailContent.Substring(0, 4000) + "\n[... предыдущие сообщения сокращены ...]";
             }
 
-            // Build the per-turn context. The Phase 2 system prompt is the
-            // Phase 1 prompt plus a tool-awareness addendum.
-            const string toolAddendum =
-                "\n\nYou may call mailbox tools if you need additional context "
-                + "(e.g. reading another message in the thread, searching the inbox, "
-                + "or creating/categorizing follow-up drafts). Most quick edits do "
-                + "not require any tools.";
             var ctx = new ConversationContext
             {
-                SystemInstructions = LiteLlmChatService.GetSystemPrompt(action) + toolAddendum,
+                SystemInstructions = LiteLlmChatService.GetSystemPrompt(action)
+                    + PromptCatalog.Default.Get("actions_tool_addendum"),
                 IncludeWriteTools = Config.WriteToolsEnabled
             };
 

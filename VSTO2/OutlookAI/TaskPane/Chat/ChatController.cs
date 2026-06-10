@@ -55,12 +55,7 @@ namespace OutlookAI.TaskPane.Chat
             {
                 _exportBridge = new ExportBridge(_surface, CreateExportPathPolicy(), RunScript);
             }
-            _composerSystemPrompt = () =>
-                "You are an AI assistant embedded in Microsoft Outlook's compose window. "
-                + "Help the user understand, draft, and revise the email in front of them. "
-                + "You have mailbox tools available for context (read other messages, search, "
-                + "list folders). Prefer one focused tool call over many. Reply concisely; "
-                + "the user is busy.";
+            _composerSystemPrompt = () => PromptCatalog.Default.Get("compose_chat");
         }
 
         /// <summary>

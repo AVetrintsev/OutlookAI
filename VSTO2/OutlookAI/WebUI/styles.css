@@ -179,6 +179,10 @@ html, body {
   opacity: 0.4;
   cursor: default;
 }
+.header-trash-btn {
+  font-size: 16px;
+  filter: grayscale(1);
+}
 .context-section {
   flex: 0 0 auto;
   padding: 14px 16px 0;
@@ -336,31 +340,6 @@ html, body {
 .msg-action[data-export-pending="1"] {
   display: inline-block;
 }
-.msg-footer {
-  margin-top: 12px;
-  padding-top: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  border-top: 1px solid var(--border);
-}
-.msg-assistant.is-streaming .msg-footer {
-  display: none;
-}
-.msg-source {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-.msg-source-mark {
-  color: var(--accent);
-  font-size: 14px;
-}
-
 .msg-assistant.msg-stopped::after {
   content: " - stopped";
   color: var(--stopped);
@@ -944,6 +923,18 @@ html, body {
 }
 .custom-action-menu button.danger {
   color: var(--tool-err);
+}
+.assistant-message-menu {
+  min-width: 180px;
+}
+.assistant-message-menu .msg-action {
+  border: 0;
+  border-radius: 3px;
+  padding: 7px 10px;
+  font: 12px var(--font-stack);
+}
+.assistant-message-menu .msg-action:disabled {
+  opacity: 0.55;
 }
 .confirm-dialog {
   position: fixed;

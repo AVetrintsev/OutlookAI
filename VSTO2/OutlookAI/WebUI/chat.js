@@ -66,6 +66,8 @@
   var $btnCustomActionCancel = document.getElementById('btnCustomActionCancel');
   var $btnCustomActionSave = document.getElementById('btnCustomActionSave');
   var $customActionMenu = document.getElementById('customActionMenu');
+  var $assistantMessageMenu = document.getElementById('assistantMessageMenu');
+  var $btnAssistantExportPdf = document.getElementById('btnAssistantExportPdf');
   var $btnCustomActionEdit = document.getElementById('btnCustomActionEdit');
   var $btnCustomActionDelete = document.getElementById('btnCustomActionDelete');
   var $customActionDeleteDialog = document.getElementById('customActionDeleteDialog');
@@ -269,7 +271,7 @@
 
     if (isRetryableExportError(err) && retryMessageId !== undefined && retryMessageId !== null && retryMessageId !== '') {
       var retryEntry = assistantMessages[retryMessageId];
-      if (retryEntry && retryEntry.exportButton) {
+      if (retryEntry && retryEntry.complete) {
         var retry = elt('button', 'error-card-btn', 'Повторить');
         retry.type = 'button';
         retry.addEventListener('click', function() {
@@ -358,35 +360,26 @@
     return 'Отчёт OutlookAI';
   }
 
-  function createExportPdfButton(messageId) {
-    var btn = elt('button', 'msg-action msg-action-pdf', 'PDF');
-    btn.type = 'button';
-    btn.title = 'Сохранить сообщение как PDF';
-    btn.setAttribute('aria-label', 'Сохранить сообщение как PDF');
-    btn.disabled = true;
-    btn.dataset.defaultText = btn.textContent;
-    btn.addEventListener('click', function() {
-      handleExportPdf(messageId);
-    });
-    return btn;
-  }
-
   function setExportButtonPending(messageId, pending) {
     var entry = assistantMessages[messageId];
-    var btn = entry && entry.exportButton;
-    if (!btn) return;
-    btn.disabled = true;
-    btn.dataset.exportPending = pending ? '1' : '0';
-    if (pending) btn.textContent = 'Сохранение...';
+    if (!entry) return;
+    entry.exportPending = !!pending;
+    if (contextAssistantMessageId === messageId && $btnAssistantExportPdf) {
+      $btnAssistantExportPdf.disabled = !!pending;
+      $btnAssistantExportPdf.dataset.exportPending = pending ? '1' : '0';
+      $btnAssistantExportPdf.textContent = pending ? 'Сохранение...' : 'Сохранить как PDF';
+    }
   }
 
   function resetExportButton(messageId) {
     var entry = assistantMessages[messageId];
-    var btn = entry && entry.exportButton;
-    if (!btn) return;
-    btn.dataset.exportPending = '0';
-    btn.textContent = btn.dataset.defaultText || 'PDF';
-    btn.disabled = !(entry && entry.complete);
+    if (!entry) return;
+    entry.exportPending = false;
+    if (contextAssistantMessageId === messageId && $btnAssistantExportPdf) {
+      $btnAssistantExportPdf.dataset.exportPending = '0';
+      $btnAssistantExportPdf.textContent = 'Сохранить как PDF';
+      $btnAssistantExportPdf.disabled = !entry.complete;
+    }
   }
 
   function handleExportPdf(messageId) {
@@ -396,7 +389,7 @@
       try { msgEl = document.querySelector('[data-message-id="' + cssEscape(messageId) + '"]'); } catch (e) { msgEl = null; }
     }
     if (!entry || !msgEl || !entry.complete) return;
-    if (entry.exportButton && entry.exportButton.dataset.exportPending === '1') return;
+    if (entry.exportPending) return;
 
     var markdown = entry.raw;
     if (markdown === undefined || markdown === null || markdown === '') {
@@ -420,6 +413,7 @@
   var customActionsById = {};
   var editingCustomActionId = null;
   var contextCustomActionId = null;
+  var contextAssistantMessageId = null;
   var pendingDeleteCustomActionId = null;
   var customActionToolCatalog = [];
 
@@ -549,8 +543,36 @@
     contextCustomActionId = null;
   }
 
+  function closeAssistantMessageMenu() {
+    if ($assistantMessageMenu) $assistantMessageMenu.hidden = true;
+    contextAssistantMessageId = null;
+  }
+
+  function openAssistantMessageMenu(messageId, clientX, clientY) {
+    var entry = assistantMessages[messageId];
+    if (!$assistantMessageMenu || !entry || !entry.complete) return;
+    closeCustomActionMenu();
+    contextAssistantMessageId = messageId;
+    $assistantMessageMenu.hidden = false;
+    if ($btnAssistantExportPdf) {
+      $btnAssistantExportPdf.title = 'Save message as PDF';
+      $btnAssistantExportPdf.disabled = !!entry.exportPending;
+      $btnAssistantExportPdf.dataset.exportPending = entry.exportPending ? '1' : '0';
+      $btnAssistantExportPdf.textContent = entry.exportPending
+        ? 'Сохранение...'
+        : 'Сохранить как PDF';
+    }
+    var width = $assistantMessageMenu.offsetWidth || 180;
+    var height = $assistantMessageMenu.offsetHeight || 40;
+    var left = Math.max(4, Math.min(clientX, window.innerWidth - width - 4));
+    var top = Math.max(4, Math.min(clientY, window.innerHeight - height - 4));
+    $assistantMessageMenu.style.left = left + 'px';
+    $assistantMessageMenu.style.top = top + 'px';
+  }
+
   function openCustomActionMenu(actionId, clientX, clientY) {
     if (!$customActionMenu || !customActionsById[actionId]) return;
+    closeAssistantMessageMenu();
     contextCustomActionId = actionId;
     $customActionMenu.hidden = false;
     var width = $customActionMenu.offsetWidth || 140;
@@ -657,14 +679,11 @@
       loading.appendChild(elt('span', 'msg-loading-label', 'Формирую ответ'));
       loading.appendChild(elt('span', 'msg-loading-dots', ''));
       node.appendChild(loading);
-      var footer = elt('div', 'msg-footer');
-      var source = elt('div', 'msg-source');
-      source.appendChild(elt('span', 'msg-source-mark', '✦'));
-      source.appendChild(elt('span', '', 'Ответ OutlookAI'));
-      footer.appendChild(source);
-      var exportButton = createExportPdfButton(id);
-      footer.appendChild(exportButton);
-      node.appendChild(footer);
+      node.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        if (!assistantMessages[id] || !assistantMessages[id].complete) return;
+        openAssistantMessageMenu(id, e.clientX, e.clientY);
+      });
       $messages.appendChild(node);
       assistantMessages[id] = {
         container: node,
@@ -672,7 +691,7 @@
         raw: initialText || '',
         complete: false,
         loading: loading,
-        exportButton: exportButton
+        exportPending: false
       };
       if (initialText) {
         node.classList.add('has-content');
@@ -879,6 +898,7 @@
       $messages.innerHTML = '';
       assistantMessages = {};
       toolCards = {};
+      closeAssistantMessageMenu();
     },
 
     applyTheme: function(themeName) {
@@ -1111,6 +1131,14 @@
   $btnCopy.addEventListener('click', function() {
     postToHost({ type: 'copy' });
   });
+  if ($btnAssistantExportPdf) {
+    $btnAssistantExportPdf.addEventListener('click', function() {
+      var messageId = contextAssistantMessageId;
+      if (!messageId) return;
+      handleExportPdf(messageId);
+      closeAssistantMessageMenu();
+    });
+  }
   window.addEventListener('focus', function() {
     postToHost({ type: 'theme_request' });
   });
@@ -1183,6 +1211,11 @@
     if (e.key === 'Escape' && $customActionMenu && !$customActionMenu.hidden) {
       e.preventDefault();
       closeCustomActionMenu();
+      return;
+    }
+    if (e.key === 'Escape' && $assistantMessageMenu && !$assistantMessageMenu.hidden) {
+      e.preventDefault();
+      closeAssistantMessageMenu();
     }
   });
 
@@ -1190,10 +1223,15 @@
     if ($customActionMenu && !$customActionMenu.hidden && !$customActionMenu.contains(e.target)) {
       closeCustomActionMenu();
     }
+    if ($assistantMessageMenu && !$assistantMessageMenu.hidden &&
+        !$assistantMessageMenu.contains(e.target)) {
+      closeAssistantMessageMenu();
+    }
   });
 
   window.addEventListener('blur', function() {
     closeCustomActionMenu();
+    closeAssistantMessageMenu();
   });
 
   // Tell the host we're ready so it can push the initial context strip

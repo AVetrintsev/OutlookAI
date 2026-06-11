@@ -16,7 +16,7 @@
       </div>
       <div class="app-header-actions">
         <button id="btnCopy" class="header-icon-btn" type="button" title="Скопировать диалог" aria-label="Скопировать диалог">⧉</button>
-        <button id="btnClear" class="header-icon-btn" type="button" title="Очистить диалог" aria-label="Очистить диалог">×</button>
+        <button id="btnClear" class="header-icon-btn header-trash-btn" type="button" title="Очистить диалог" aria-label="Очистить диалог">🗑</button>
       </div>
     </header>
     <section class="context-section">
@@ -133,6 +133,13 @@
     <div id="customActionMenu" class="custom-action-menu" role="menu" hidden>
       <button id="btnCustomActionEdit" type="button" role="menuitem">Изменить</button>
       <button id="btnCustomActionDelete" type="button" role="menuitem" class="danger">Удалить</button>
+    </div>
+    <div id="assistantMessageMenu" class="custom-action-menu assistant-message-menu" role="menu" hidden>
+      <button id="btnAssistantExportPdf"
+              class="msg-action msg-action-pdf"
+              type="button"
+              role="menuitem"
+              title="Save message as PDF">Сохранить как PDF</button>
     </div>
     <div id="customActionDeleteDialog" class="confirm-dialog" hidden>
       <div class="confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="customActionDeleteTitle">

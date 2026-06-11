@@ -15,6 +15,9 @@ namespace OutlookAI
         private ComboBox _cmbReasoningEffort;
         private CheckedListBox _clbWriteTools;
         private Label _lblSaved;
+        private CheckBox _chkLlmDebugLogEnabled;
+        private TextBox _txtLlmDebugLogPath;
+        private Label _lblDebugLogSaved;
 
         public SettingsForm()
             : this(Globals.ThisAddIn != null ? Globals.ThisAddIn.CredentialService : null)
@@ -26,7 +29,7 @@ namespace OutlookAI
             _credentials = credentials;
 
             Text = "Настройки OutlookAI";
-            Size = new Size(460, 430);
+            Size = new Size(460, 545);
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -52,6 +55,7 @@ namespace OutlookAI
 
             BuildConnectorGroup(panel);
             BuildAiBehaviorGroup(panel);
+            BuildDebugLoggingGroup(panel);
             Controls.Add(panel);
             UpdateCredentialUi(GetCurrentStatus());
         }
@@ -217,6 +221,69 @@ namespace OutlookAI
             parent.Controls.Add(grpAi);
         }
 
+        private void BuildDebugLoggingGroup(Control parent)
+        {
+            var grp = new GroupBox
+            {
+                Text = "Отладочный лог LLM",
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Location = new Point(20, 370),
+                Size = new Size(400, 105)
+            };
+
+            _chkLlmDebugLogEnabled = new CheckBox
+            {
+                Text = "Логировать запросы и ответы LiteLLM",
+                Location = new Point(15, 24),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular),
+                Checked = Config.LlmDebugLogEnabled
+            };
+
+            _txtLlmDebugLogPath = new TextBox
+            {
+                Location = new Point(15, 52),
+                Width = 280,
+                Text = Config.LlmDebugLogPath ?? ""
+            };
+
+            var btnBrowse = new Button
+            {
+                Text = "...",
+                Location = new Point(300, 50),
+                Width = 32
+            };
+            btnBrowse.Click += BtnBrowseDebugLog_Click;
+
+            var btnSave = new Button
+            {
+                Text = "Сохранить",
+                Location = new Point(335, 50),
+                Width = 55
+            };
+            btnSave.Click += BtnSaveDebugLog_Click;
+
+            _lblDebugLogSaved = new Label
+            {
+                Location = new Point(15, 78),
+                AutoSize = true,
+                ForeColor = Color.DarkGreen,
+                Font = new Font("Segoe UI", 8F, FontStyle.Italic),
+                Visible = false,
+                Text = "Сохранено."
+            };
+
+            grp.Controls.AddRange(new Control[]
+            {
+                _chkLlmDebugLogEnabled,
+                _txtLlmDebugLogPath,
+                btnBrowse,
+                btnSave,
+                _lblDebugLogSaved
+            });
+            parent.Controls.Add(grp);
+        }
+
         private void BtnSaveApiKey_Click(object sender, EventArgs e)
         {
             if (_credentials == null)
@@ -261,6 +328,44 @@ namespace OutlookAI
             _lblSaved.Visible = true;
             var t = new Timer { Interval = 2500 };
             t.Tick += (s, e2) => { _lblSaved.Visible = false; t.Stop(); t.Dispose(); };
+            t.Start();
+        }
+
+        private void BtnBrowseDebugLog_Click(object sender, EventArgs e)
+        {
+            using (var dlg = new SaveFileDialog())
+            {
+                dlg.Title = "Файл отладочного лога LLM";
+                dlg.Filter = "Log files (*.log)|*.log|Text files (*.txt)|*.txt|All files (*.*)|*.*";
+                dlg.FileName = string.IsNullOrWhiteSpace(_txtLlmDebugLogPath.Text)
+                    ? "outlookai-llm-debug.log"
+                    : System.IO.Path.GetFileName(_txtLlmDebugLogPath.Text);
+                if (!string.IsNullOrWhiteSpace(_txtLlmDebugLogPath.Text))
+                {
+                    try
+                    {
+                        dlg.InitialDirectory = System.IO.Path.GetDirectoryName(_txtLlmDebugLogPath.Text);
+                    }
+                    catch { }
+                }
+
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    _txtLlmDebugLogPath.Text = dlg.FileName;
+                    _chkLlmDebugLogEnabled.Checked = true;
+                }
+            }
+        }
+
+        private void BtnSaveDebugLog_Click(object sender, EventArgs e)
+        {
+            Config.LlmDebugLogEnabled = _chkLlmDebugLogEnabled.Checked;
+            Config.LlmDebugLogPath = (_txtLlmDebugLogPath.Text ?? "").Trim();
+            Config.SaveConfig();
+
+            _lblDebugLogSaved.Visible = true;
+            var t = new Timer { Interval = 2500 };
+            t.Tick += (s, e2) => { _lblDebugLogSaved.Visible = false; t.Stop(); t.Dispose(); };
             t.Start();
         }
 

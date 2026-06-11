@@ -273,11 +273,26 @@ namespace OutlookAI.TaskPane.InboxCopilot
                         new JProperty("id", custom.Id),
                         new JProperty("type", "custom_action"),
                         new JProperty("label", custom.Title),
-                        new JProperty("prompt", custom.Description ?? custom.Prompt ?? "")));
+                        new JProperty("prompt", custom.Description ?? custom.Prompt ?? ""),
+                        new JProperty("description", custom.Description ?? ""),
+                        new JProperty("action_prompt", custom.Prompt ?? ""),
+                        new JProperty("source", custom.Context?.Source ?? "current_selection"),
+                        new JProperty("read_filter", custom.Context?.ReadFilter ?? "all"),
+                        new JProperty("time_range", custom.Context?.TimeRange ?? "today"),
+                        new JProperty("manual_from", custom.Context?.ManualFrom?.ToString("o")),
+                        new JProperty("manual_to", custom.Context?.ManualTo?.ToString("o")),
+                        new JProperty("max_items", custom.Context?.MaxItems ?? 20),
+                        new JProperty("include_full_bodies", custom.Context?.IncludeFullBodies ?? true),
+                        new JProperty("include_attachments", custom.Context?.IncludeAttachments ?? false),
+                        new JProperty("output", custom.Output ?? "chat"),
+                        new JProperty("allowed_tools", new JArray(custom.AllowedTools ?? new string[0]))));
                 }
+                var options = new JObject(
+                    new JProperty("allowCustomActionManagement", true),
+                    new JProperty("customActionTools", ToolManifestCatalog.Default.BuildUiToolsArray()));
                 _ = RunScript("outlookai.setQuickActions(" +
                     chipsArr.ToString(Newtonsoft.Json.Formatting.None) +
-                    ", {allowCustomActionManagement:true});");
+                    ", " + options.ToString(Newtonsoft.Json.Formatting.None) + ");");
             }
             catch (Exception ex)
             {
@@ -303,9 +318,28 @@ namespace OutlookAI.TaskPane.InboxCopilot
                 }
 
                 var source = (string)payload["source"] ?? "current_selection";
+                var existingId = ((string)payload["id"] ?? "").Trim();
+                var isFolderSource = source == "current_folder" || source == "all_folders";
+                var timeRange = isFolderSource
+                    ? (string)payload["time_range"] ?? "today"
+                    : "today";
+                var includeFullBodies = (bool?)payload["include_full_bodies"] ?? true;
+                var availableTools = new System.Collections.Generic.HashSet<string>(
+                    ToolManifestCatalog.Default.BuildUiToolsArray()
+                        .OfType<JObject>()
+                        .Select(tool => (string)tool["name"])
+                        .Where(name => !string.IsNullOrWhiteSpace(name)),
+                    StringComparer.OrdinalIgnoreCase);
+                var allowedTools = ((payload["allowed_tools"] as JArray)?.Values<string>()
+                    ?? Enumerable.Empty<string>())
+                    .Where(availableTools.Contains)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
                 var action = new CustomActionDefinition
                 {
-                    Id = CustomActionStore.MakeActionId(title),
+                    Id = string.IsNullOrWhiteSpace(existingId)
+                        ? CustomActionStore.MakeActionId(title)
+                        : existingId,
                     Title = title,
                     Description = ((string)payload["description"] ?? "").Trim(),
                     Prompt = prompt,
@@ -314,14 +348,27 @@ namespace OutlookAI.TaskPane.InboxCopilot
                         Source = source,
                         MessageScope = source == "related_thread" ? "thread" : "selected",
                         FolderScope = source == "all_folders" ? "all_folders" : "current_folder",
-                        ReadFilter = (string)payload["read_filter"] ?? "all",
-                        TimeRange = (string)payload["time_range"] ?? "today",
-                        IncludeFullBodies = (bool?)payload["include_full_bodies"] ?? true,
-                        IncludeAttachments = (bool?)payload["include_attachments"] ?? false,
-                        MaxItems = Math.Max(1, Math.Min(100, (int?)payload["max_items"] ?? 20))
+                        ReadFilter = isFolderSource
+                            ? (string)payload["read_filter"] ?? "all"
+                            : "all",
+                        TimeRange = timeRange,
+                        ManualFrom = timeRange == "manual"
+                            ? (DateTimeOffset?)payload["manual_from"]
+                            : null,
+                        ManualTo = timeRange == "manual"
+                            ? (DateTimeOffset?)payload["manual_to"]
+                            : null,
+                        IncludeFullBodies = includeFullBodies,
+                        IncludeAttachments = (!isFolderSource || includeFullBodies)
+                            ? (bool?)payload["include_attachments"] ?? false
+                            : false,
+                        MaxItems = source == "current_open_message"
+                            ? 1
+                            : Math.Max(1, Math.Min(100, (int?)payload["max_items"] ?? 20))
                     },
                     Output = (string)payload["output"] ?? "chat",
-                    AllowTools = (bool?)payload["allow_tools"] ?? false
+                    AllowTools = allowedTools.Length > 0,
+                    AllowedTools = allowedTools
                 };
 
                 _customActionStore.Upsert(action);
@@ -460,7 +507,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
 
             try
             {
-                var runner = new CustomActionRunner(_chat, _surface);
+                var runner = new CustomActionRunner(_chat, _surface, _toolHost);
                 var result = await runner.RunAsync(action, _activeCts.Token).ConfigureAwait(false);
                 await RunScript("outlookai.appendTextDelta(" +
                     JsString(assistantId) + ", " + JsString(result.Text ?? "") + ");");

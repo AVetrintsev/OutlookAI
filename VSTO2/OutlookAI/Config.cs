@@ -27,6 +27,8 @@ namespace OutlookAI
         public const int DefaultMaxTokens = 4096;
         public const bool DefaultWriteToolsEnabled = true;
         public const int DefaultMaxBulkExportRows = 2000;
+        public const bool DefaultLlmDebugLogEnabled = false;
+        public const string DefaultLlmDebugLogPath = "";
 
         private const int MinBulkExportRows = 1;
         private const int MaxBulkExportRowsCeiling = Services.Tools.BulkExportRowCap.Max;
@@ -42,6 +44,8 @@ namespace OutlookAI
         public static int MaxTokens { get; set; } = DefaultMaxTokens;
         public static bool WriteToolsEnabled { get; set; } = DefaultWriteToolsEnabled;
         public static int MaxBulkExportRows { get; set; } = DefaultMaxBulkExportRows;
+        public static bool LlmDebugLogEnabled { get; set; } = DefaultLlmDebugLogEnabled;
+        public static string LlmDebugLogPath { get; set; } = DefaultLlmDebugLogPath;
 
         public static readonly string[] AllWriteTools =
         {
@@ -179,6 +183,8 @@ namespace OutlookAI
             MaxTokens = DefaultMaxTokens;
             WriteToolsEnabled = DefaultWriteToolsEnabled;
             MaxBulkExportRows = DefaultMaxBulkExportRows;
+            LlmDebugLogEnabled = DefaultLlmDebugLogEnabled;
+            LlmDebugLogPath = DefaultLlmDebugLogPath;
             EnabledWriteTools = new HashSet<string>(AllWriteTools, StringComparer.Ordinal);
         }
 
@@ -227,6 +233,18 @@ namespace OutlookAI
                     EnabledWriteTools = new HashSet<string>(
                         requested.Where(canonical.Contains),
                         StringComparer.Ordinal);
+                }
+
+                var llmDebugLogEnabled = root.Element("LlmDebugLogEnabled");
+                if (llmDebugLogEnabled != null && bool.TryParse(llmDebugLogEnabled.Value, out var logEnabled))
+                {
+                    LlmDebugLogEnabled = logEnabled;
+                }
+
+                var llmDebugLogPath = root.Element("LlmDebugLogPath");
+                if (llmDebugLogPath != null)
+                {
+                    LlmDebugLogPath = (llmDebugLogPath.Value ?? "").Trim();
                 }
 
                 if (allowApiKey)
@@ -317,7 +335,9 @@ namespace OutlookAI
                     + "; LiteLlmBaseUrl=" + NormalizeBaseUrl(LiteLlmBaseUrl)
                     + "; Model=" + Model
                     + "; VoiceModel=" + (string.IsNullOrWhiteSpace(VoiceModel) ? "<disabled>" : VoiceModel)
-                    + "; ApiKeyConfigured=" + (!string.IsNullOrWhiteSpace(LiteLlmApiKey)),
+                    + "; ApiKeyConfigured=" + (!string.IsNullOrWhiteSpace(LiteLlmApiKey))
+                    + "; LlmDebugLogEnabled=" + LlmDebugLogEnabled
+                    + "; LlmDebugLogPath=" + (string.IsNullOrWhiteSpace(LlmDebugLogPath) ? "<none>" : LlmDebugLogPath),
                     "Config");
             }
             catch
@@ -334,7 +354,9 @@ namespace OutlookAI
                     new XElement("ReasoningEffort", ReasoningEffort),
                     new XElement("WriteToolsEnabled", WriteToolsEnabled),
                     new XElement("EnabledWriteTools",
-                        string.Join(",", EnabledWriteTools ?? new HashSet<string>()))
+                        string.Join(",", EnabledWriteTools ?? new HashSet<string>())),
+                    new XElement("LlmDebugLogEnabled", LlmDebugLogEnabled),
+                    new XElement("LlmDebugLogPath", LlmDebugLogPath ?? "")
                 )
             );
 

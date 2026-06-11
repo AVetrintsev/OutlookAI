@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
@@ -20,10 +21,24 @@ namespace OutlookAI.Services.Tools
 
         public JArray BuildResponsesToolsArray(bool includeWriteTools)
         {
+            return BuildResponsesToolsArray(includeWriteTools, null);
+        }
+
+        public JArray BuildResponsesToolsArray(
+            bool includeWriteTools,
+            IEnumerable<string> allowedToolNames)
+        {
             var arr = new JArray();
+            var allowed = allowedToolNames == null
+                ? null
+                : new HashSet<string>(allowedToolNames, StringComparer.OrdinalIgnoreCase);
             foreach (var item in _tools.OfType<JObject>())
             {
                 var name = (string)item["name"] ?? "";
+                if (allowed != null && !allowed.Contains(name))
+                {
+                    continue;
+                }
                 var isWrite = IsWriteTool(name);
                 if (isWrite && !includeWriteTools)
                 {
@@ -36,6 +51,36 @@ namespace OutlookAI.Services.Tools
                 arr.Add((JObject)item.DeepClone());
             }
             return arr;
+        }
+
+        public JArray BuildUiToolsArray()
+        {
+            var arr = new JArray();
+            foreach (var item in _tools.OfType<JObject>())
+            {
+                var name = (string)item["name"] ?? "";
+                var isWrite = IsWriteTool(name);
+                if (isWrite && !IsWriteToolEnabled(name))
+                {
+                    continue;
+                }
+
+                arr.Add(new JObject(
+                    new JProperty("name", name),
+                    new JProperty("description", ShortDescription((string)item["description"] ?? "")),
+                    new JProperty("is_write", isWrite)));
+            }
+            return arr;
+        }
+
+        private static string ShortDescription(string description)
+        {
+            const int maxLength = 220;
+            if (string.IsNullOrWhiteSpace(description) || description.Length <= maxLength)
+            {
+                return description ?? "";
+            }
+            return description.Substring(0, maxLength).TrimEnd() + "...";
         }
 
         private static ToolManifestCatalog LoadDefault()
@@ -62,7 +107,7 @@ namespace OutlookAI.Services.Tools
             return new ToolManifestCatalog(tools);
         }
 
-        private static bool IsWriteTool(string name)
+        public static bool IsWriteTool(string name)
         {
             return name == "outlook_create_draft"
                 || name == "outlook_mark_as_read"

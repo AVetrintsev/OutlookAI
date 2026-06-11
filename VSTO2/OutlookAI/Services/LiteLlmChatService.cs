@@ -83,6 +83,11 @@ namespace OutlookAI.Services
 
             var appended = new List<JObject>();
             var result = new TurnResult();
+            var allowedToolNames = context.AllowedToolNames == null
+                ? null
+                : new HashSet<string>(
+                    context.AllowedToolNames.Where(name => !string.IsNullOrWhiteSpace(name)),
+                    StringComparer.OrdinalIgnoreCase);
 
             for (int rounds = 1; rounds <= MaxToolRounds; rounds++)
             {
@@ -134,7 +139,7 @@ namespace OutlookAI.Services
                 }
 
                 var dispatchTasks = pendingCalls.Select(call =>
-                    DispatchOneAsync(toolHost, sink, call, cancellationToken)).ToArray();
+                    DispatchOneAsync(toolHost, sink, call, allowedToolNames, cancellationToken)).ToArray();
 
                 DispatchedCall[] dispatched;
                 try
@@ -173,34 +178,65 @@ namespace OutlookAI.Services
             ChatEventSink sink,
             CancellationToken cancellationToken)
         {
-            using (var request = new HttpRequestMessage(HttpMethod.Post, ChatCompletionsEndpoint))
+            var requestId = LlmDebugLogger.NewRequestId();
+            var endpoint = ChatCompletionsEndpoint;
+            LlmDebugLogger.Write(requestId, "request.metadata",
+                "endpoint=" + endpoint
+                + "\r\nmodel=" + Config.Model
+                + "\r\ntemperature=" + Config.Temperature.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + "\r\nmax_tokens=" + Config.MaxTokens
+                + "\r\nreasoning_effort=" + (Config.ReasoningEffort ?? "")
+                + "\r\nstream=true"
+                + "\r\napi_key_logged=false");
+            LlmDebugLogger.WriteJson(requestId, "request.body", body);
+
+            try
             {
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _credentials.GetApiKey());
-                request.Headers.Accept.ParseAdd("text/event-stream");
-                request.Content = new StringContent(
-                    body.ToString(Newtonsoft.Json.Formatting.None),
-                    Encoding.UTF8,
-                    "application/json");
-
-                using (var response = await _http.SendAsync(
-                    request,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    cancellationToken).ConfigureAwait(false))
+                using (var request = new HttpRequestMessage(HttpMethod.Post, endpoint))
                 {
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        var errorBody = await SafeReadAsStringAsync(response).ConfigureAwait(false);
-                        sink.OnError(errorBody);
-                        throw new InvalidOperationException(
-                            "LiteLLM backend error: " + (int)response.StatusCode + " " + errorBody);
-                    }
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _credentials.GetApiKey());
+                    request.Headers.Accept.ParseAdd("text/event-stream");
+                    request.Content = new StringContent(
+                        body.ToString(Newtonsoft.Json.Formatting.None),
+                        Encoding.UTF8,
+                        "application/json");
 
-                    using (var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
+                    using (var response = await _http.SendAsync(
+                        request,
+                        HttpCompletionOption.ResponseHeadersRead,
+                        cancellationToken).ConfigureAwait(false))
                     {
-                        return await ReadChatCompletionsSseAsync(stream, assistantText, sink, cancellationToken)
-                            .ConfigureAwait(false);
+                        LlmDebugLogger.Write(requestId, "response.status",
+                            "status_code=" + (int)response.StatusCode
+                            + "\r\nreason=" + response.ReasonPhrase
+                            + "\r\ncontent_type=" + (response.Content?.Headers?.ContentType?.ToString() ?? ""));
+
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            var errorBody = await SafeReadAsStringAsync(response).ConfigureAwait(false);
+                            LlmDebugLogger.Write(requestId, "response.error_body", errorBody);
+                            sink.OnError(errorBody);
+                            throw new InvalidOperationException(
+                                "LiteLLM backend error: " + (int)response.StatusCode + " " + errorBody);
+                        }
+
+                        using (var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
+                        {
+                            return await ReadChatCompletionsSseAsync(stream, assistantText, sink, cancellationToken, requestId)
+                                .ConfigureAwait(false);
+                        }
                     }
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                LlmDebugLogger.Write(requestId, "request.cancelled", "Operation cancelled.");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                LlmDebugLogger.Write(requestId, "request.exception", ex.ToString());
+                throw;
             }
         }
 
@@ -208,11 +244,13 @@ namespace OutlookAI.Services
             Stream stream,
             StringBuilder assistantText,
             ChatEventSink sink,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            string requestId = null)
         {
             var callsByIndex = new Dictionary<int, JObject>();
             var bufferedText = new StringBuilder();
             var bufferingPotentialTextToolCall = true;
+            var rawSse = new StringBuilder();
 
             using (var reader = new StreamReader(stream, Encoding.UTF8))
             {
@@ -226,6 +264,7 @@ namespace OutlookAI.Services
                     }
 
                     var payload = line.Substring(5).TrimStart();
+                    rawSse.AppendLine(payload);
                     if (payload == "[DONE]")
                     {
                         break;
@@ -317,6 +356,8 @@ namespace OutlookAI.Services
                 .Where(call => !string.IsNullOrEmpty((string)call["name"]))
                 .ToList();
 
+            LlmDebugLogger.Write(requestId, "response.raw_sse_data", rawSse.ToString());
+
             if (calls.Count == 0 && TryParseTextToolCalls(assistantText.ToString(), out var textCalls))
             {
                 assistantText.Clear();
@@ -353,6 +394,11 @@ namespace OutlookAI.Services
                 }
                 sink.OnToolCallStart(callId, (string)call["name"] ?? "", (string)call["arguments"] ?? "");
             }
+
+            LlmDebugLogger.Write(requestId, "response.parsed",
+                "assistant_text:\r\n" + assistantText
+                + "\r\n\r\ntool_calls:\r\n"
+                + new JArray(calls.Select(c => c.DeepClone())).ToString(Newtonsoft.Json.Formatting.Indented));
 
             return calls;
         }
@@ -797,6 +843,7 @@ namespace OutlookAI.Services
             IToolHost toolHost,
             ChatEventSink sink,
             JObject call,
+            ISet<string> allowedToolNames,
             CancellationToken ct)
         {
             var name = (string)call["name"] ?? "";
@@ -810,31 +857,53 @@ namespace OutlookAI.Services
                     "LiteLlmChat");
             }
             catch { }
+            LlmDebugLogger.Write(callId, "tool.dispatch.start",
+                "name=" + name
+                + "\r\ncall_id=" + callId
+                + "\r\narguments:\r\n" + (args ?? ""));
 
             string outputJson;
             bool ok = true;
-            try
+            if (allowedToolNames != null && !allowedToolNames.Contains(name))
             {
-                outputJson = await toolHost.DispatchAsync(name, args, ct).ConfigureAwait(false);
-                if (string.IsNullOrEmpty(outputJson))
-                {
-                    outputJson = "{}";
-                }
-                else if (LooksLikeErrorEnvelope(outputJson))
-                {
-                    ok = false;
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                outputJson = BuildErrorEnvelope(ex);
+                outputJson = new JObject(
+                    new JProperty("error", new JObject(
+                        new JProperty("code", "tool_not_allowed"),
+                        new JProperty("message", "Tool is not allowed for this custom action."))))
+                    .ToString(Newtonsoft.Json.Formatting.None);
                 ok = false;
             }
+            else
+            {
+                try
+                {
+                    outputJson = await toolHost.DispatchAsync(name, args, ct).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(outputJson))
+                    {
+                        outputJson = "{}";
+                    }
+                    else if (LooksLikeErrorEnvelope(outputJson))
+                    {
+                        ok = false;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    outputJson = BuildErrorEnvelope(ex);
+                    ok = false;
+                    LlmDebugLogger.Write(callId, "tool.dispatch.exception", ex.ToString());
+                }
+            }
 
+            LlmDebugLogger.Write(callId, "tool.dispatch.result",
+                "name=" + name
+                + "\r\ncall_id=" + callId
+                + "\r\nok=" + ok
+                + "\r\noutput:\r\n" + outputJson);
             sink.OnToolCallResult(callId, ok, Summarize(outputJson), outputJson);
             return new DispatchedCall
             {
@@ -869,8 +938,14 @@ namespace OutlookAI.Services
         {
             var messages = BuildMessages(context.SystemInstructions, context.History);
             var body = BuildBaseChatBody(messages, stream: true);
-            body["tools"] = ToolCatalogSchema.BuildChatCompletionsToolsArray(context.IncludeWriteTools);
-            body["tool_choice"] = "auto";
+            var tools = ToolCatalogSchema.BuildChatCompletionsToolsArray(
+                context.IncludeWriteTools,
+                context.AllowedToolNames);
+            if (tools.Count > 0)
+            {
+                body["tools"] = tools;
+                body["tool_choice"] = "auto";
+            }
             AddReasoningEffort(body, context.ReasoningEffortOverride);
             return body;
         }

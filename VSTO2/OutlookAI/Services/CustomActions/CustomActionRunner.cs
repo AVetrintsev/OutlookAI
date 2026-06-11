@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using OutlookAI.Services.Chat;
 using OutlookAI.Services.Export;
 using OutlookAI.Services.Tools;
 
@@ -11,17 +12,23 @@ namespace OutlookAI.Services.CustomActions
 {
     public sealed class CustomActionRunner
     {
+        private const string MissingContextMessage =
+            "Не удалось получить текст письма. Откройте или выберите сообщение и повторите действие.";
+
         private readonly LiteLlmChatService _chat;
         private readonly IOutlookSurface _surface;
+        private readonly IToolHost _toolHost;
         private readonly CustomActionStateStore _state;
 
         public CustomActionRunner(
             LiteLlmChatService chat,
             IOutlookSurface surface,
+            IToolHost toolHost = null,
             CustomActionStateStore state = null)
         {
             _chat = chat ?? throw new ArgumentNullException(nameof(chat));
             _surface = surface ?? throw new ArgumentNullException(nameof(surface));
+            _toolHost = toolHost;
             _state = state ?? new CustomActionStateStore();
         }
 
@@ -32,11 +39,43 @@ namespace OutlookAI.Services.CustomActions
             if (action == null) throw new ArgumentNullException(nameof(action));
 
             var context = BuildContext(action, ct);
+            if (IsMissingContext(context))
+            {
+                return new CustomActionRunResult
+                {
+                    Text = MissingContextMessage,
+                    Output = "chat"
+                };
+            }
+
             var userMessage = BuildControlledUserMessage(action, context);
-            var text = await _chat.CompleteWithoutToolsAsync(
-                PromptCatalog.Default.Get("custom_action_controlled"),
-                userMessage,
-                ct).ConfigureAwait(false);
+            var allowedTools = (action.AllowedTools ?? new string[0])
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            string text;
+            if (allowedTools.Length > 0 && _toolHost != null)
+            {
+                var turn = await _chat.RunTurnAsync(
+                    new ConversationContext
+                    {
+                        SystemInstructions = PromptCatalog.Default.Get("custom_action_controlled"),
+                        IncludeWriteTools = allowedTools.Any(ToolManifestCatalog.IsWriteTool),
+                        AllowedToolNames = allowedTools
+                    },
+                    userMessage,
+                    _toolHost,
+                    new ChatEventSink(),
+                    ct).ConfigureAwait(false);
+                text = turn.FinalAssistantText ?? "";
+            }
+            else
+            {
+                text = await _chat.CompleteWithoutToolsAsync(
+                    PromptCatalog.Default.Get("custom_action_controlled"),
+                    userMessage,
+                    ct).ConfigureAwait(false);
+            }
 
             var result = ApplyOutput(action, text, ct);
             _state.SetLastRun(action.Id, DateTimeOffset.UtcNow);
@@ -49,7 +88,21 @@ namespace OutlookAI.Services.CustomActions
             var source = Normalize(ctx.Source, "current_selection");
             if (source == "current_open_message")
             {
-                return FormatCompose(_surface.GetCurrentComposeState(ctx.IncludeFullBodies));
+                var compose = _surface.GetCurrentComposeState(ctx.IncludeFullBodies);
+                if (HasComposeContent(compose))
+                {
+                    return FormatCompose(compose, ctx.IncludeAttachments);
+                }
+
+                var selection = _surface.GetCurrentSelection(
+                    ctx.IncludeFullBodies,
+                    Clamp(ctx.MaxItems, 1, 100, 20));
+                if (HasSelectionContent(selection))
+                {
+                    return FormatSelection(selection, ctx.IncludeAttachments);
+                }
+
+                return MissingContextMessage;
             }
 
             if (source == "current_selection" || source == "selected_messages" || source == "related_thread")
@@ -199,7 +252,7 @@ namespace OutlookAI.Services.CustomActions
             return "any";
         }
 
-        private static string FormatCompose(ComposeStateResult state)
+        private static string FormatCompose(ComposeStateResult state, bool includeAttachments)
         {
             if (state == null) return "Открытое сообщение недоступно.";
             var sb = new StringBuilder();
@@ -207,6 +260,10 @@ namespace OutlookAI.Services.CustomActions
             sb.AppendLine("Subject: " + (state.Subject ?? ""));
             sb.AppendLine("To: " + string.Join(", ", state.ToRecipients ?? new string[0]));
             sb.AppendLine("Cc: " + string.Join(", ", state.CcRecipients ?? new string[0]));
+            if (includeAttachments && state.Attachments != null && state.Attachments.Count > 0)
+            {
+                sb.AppendLine("Attachments: " + string.Join(", ", state.Attachments.Select(a => a.Filename)));
+            }
             sb.AppendLine("Body:");
             sb.AppendLine(state.BodyPlaintext ?? "");
             return sb.ToString();
@@ -219,6 +276,32 @@ namespace OutlookAI.Services.CustomActions
                 return "Нет выбранных сообщений.";
             }
             return FormatDetails(selection.Messages, includeAttachments);
+        }
+
+        private static bool HasComposeContent(ComposeStateResult state)
+        {
+            if (state == null) return false;
+            return !string.IsNullOrWhiteSpace(state.Subject)
+                || !string.IsNullOrWhiteSpace(state.BodyPlaintext)
+                || (state.ToRecipients != null && state.ToRecipients.Any(r => !string.IsNullOrWhiteSpace(r)))
+                || (state.CcRecipients != null && state.CcRecipients.Any(r => !string.IsNullOrWhiteSpace(r)));
+        }
+
+        private static bool HasSelectionContent(CurrentSelectionResult selection)
+        {
+            return selection != null
+                && selection.Messages != null
+                && selection.Messages.Any(m =>
+                    m != null
+                    && (!string.IsNullOrWhiteSpace(m.Subject)
+                        || !string.IsNullOrWhiteSpace(m.BodyPlaintext)
+                        || !string.IsNullOrWhiteSpace(m.From)));
+        }
+
+        private static bool IsMissingContext(string context)
+        {
+            return string.IsNullOrWhiteSpace(context)
+                || string.Equals(context.Trim(), MissingContextMessage, StringComparison.Ordinal);
         }
 
         private static string FormatSummaries(System.Collections.Generic.IEnumerable<MessageSummary> messages)

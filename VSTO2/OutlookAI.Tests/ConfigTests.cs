@@ -28,6 +28,8 @@ namespace OutlookAI.Tests
             Assert.Equal("", Config.VoiceModel);
             Assert.Equal(0.2, Config.Temperature);
             Assert.Equal(4096, Config.MaxTokens);
+            Assert.False(Config.LlmDebugLogEnabled);
+            Assert.Equal("", Config.LlmDebugLogPath);
         }
 
         [Fact]
@@ -177,6 +179,21 @@ namespace OutlookAI.Tests
 
             Assert.Equal("Low", Config.ReasoningEffort);
             Assert.False(Config.WriteToolsEnabled);
+        }
+
+        [Fact]
+        public void LoadConfigFromPaths_UserEnablesLlmDebugLog()
+        {
+            var (g, u) = MakeTempPaths();
+            File.WriteAllText(u, "<Config>"
+                + "<LlmDebugLogEnabled>true</LlmDebugLogEnabled>"
+                + "<LlmDebugLogPath>C:\\Temp\\outlookai-llm.log</LlmDebugLogPath>"
+                + "</Config>");
+
+            Config.LoadConfigFromPaths(g, u);
+
+            Assert.True(Config.LlmDebugLogEnabled);
+            Assert.Equal("C:\\Temp\\outlookai-llm.log", Config.LlmDebugLogPath);
         }
 
         [Fact]

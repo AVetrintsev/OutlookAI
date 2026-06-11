@@ -23,6 +23,33 @@ namespace OutlookAI.Tests.Services.Tools
         }
 
         [Fact]
+        public void BuildResponsesToolsArray_FiltersToAllowedNames()
+        {
+            var tools = ToolCatalogSchema.BuildResponsesToolsArray(
+                includeWriteTools: false,
+                allowedToolNames: new[]
+                {
+                    "outlook_search_messages",
+                    "outlook_read_message"
+                });
+
+            Assert.Equal(2, tools.Count);
+            Assert.NotNull(FindTool(tools, "outlook_search_messages"));
+            Assert.NotNull(FindTool(tools, "outlook_read_message"));
+            Assert.Null(FindTool(tools, "outlook_list_folders"));
+        }
+
+        [Fact]
+        public void BuildChatCompletionsToolsArray_EmptyAllowedNames_ReturnsNoTools()
+        {
+            var tools = ToolCatalogSchema.BuildChatCompletionsToolsArray(
+                includeWriteTools: true,
+                allowedToolNames: new string[0]);
+
+            Assert.Empty(tools);
+        }
+
+        [Fact]
         public void SearchMessages_Description_IncludesSteeringExamples()
         {
             var tools = ToolCatalogSchema.BuildResponsesToolsArray(includeWriteTools: false);

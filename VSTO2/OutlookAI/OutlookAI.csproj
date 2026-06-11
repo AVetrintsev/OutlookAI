@@ -329,6 +329,7 @@
     <Compile Include="Services\CustomActions\CustomActionStore.cs" />
     <Compile Include="Services\LiteLlmCredentialService.cs" />
     <Compile Include="Services\LiteLlmChatService.cs" />
+    <Compile Include="Services\LlmDebugLogger.cs" />
     <Compile Include="Services\ManifestPathResolver.cs" />
     <Compile Include="Services\Export\ExcelCellCoercer.cs" />
     <Compile Include="Services\Export\ExcelColumnSpec.cs" />

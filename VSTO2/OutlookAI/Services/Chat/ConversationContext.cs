@@ -15,5 +15,6 @@ namespace OutlookAI.Services.Chat
         public List<JObject> History { get; set; } = new List<JObject>();
         public string ReasoningEffortOverride { get; set; }   // null => Config.ReasoningEffort
         public bool IncludeWriteTools { get; set; } = true;
+        public IReadOnlyCollection<string> AllowedToolNames { get; set; }
     }
 }

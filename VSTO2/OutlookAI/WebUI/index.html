@@ -26,57 +26,83 @@
           <div id="customActionTitle" class="custom-action-title">Новое действие</div>
           <button id="btnCustomActionClose" class="icon-btn" type="button" title="Закрыть" aria-label="Закрыть">×</button>
         </div>
-        <label class="field-label" for="customActionName">Название</label>
-        <input id="customActionName" class="field-input" type="text" maxlength="80">
-        <label class="field-label" for="customActionHint">Описание</label>
-        <input id="customActionHint" class="field-input" type="text" maxlength="160">
-        <label class="field-label" for="customActionPrompt">Промпт</label>
-        <textarea id="customActionPrompt" class="field-input field-textarea" rows="5"></textarea>
-        <div class="field-grid">
-          <label class="field-label">Источник
-            <select id="customActionSource" class="field-input">
-              <option value="current_selection">Выбранные сообщения</option>
-              <option value="current_open_message">Текущее открытое сообщение</option>
-              <option value="related_thread">Вся связанная переписка</option>
-              <option value="current_folder">Текущая папка</option>
-              <option value="all_folders">Все папки</option>
+        <div class="custom-action-body">
+          <label class="field-label" for="customActionName">Название</label>
+          <input id="customActionName" class="field-input" type="text" maxlength="80">
+          <label class="field-label" for="customActionHint">Описание</label>
+          <input id="customActionHint" class="field-input" type="text" maxlength="160">
+          <label class="field-label" for="customActionPrompt">Промпт</label>
+          <textarea id="customActionPrompt" class="field-input field-textarea" rows="7"></textarea>
+          <div class="field-grid">
+            <label class="field-label">Источник
+              <select id="customActionSource" class="field-input">
+                <option value="current_selection">Выбранные сообщения</option>
+                <option value="current_open_message">Текущее открытое сообщение</option>
+                <option value="related_thread">Вся связанная переписка</option>
+                <option value="current_folder">Текущая папка</option>
+                <option value="all_folders">Все папки</option>
+              </select>
+            </label>
+            <label id="customActionFilterField" class="field-label">Фильтр
+              <select id="customActionFilter" class="field-input">
+                <option value="all">Все</option>
+                <option value="unread">Непрочитанные</option>
+                <option value="read">Прочитанные</option>
+              </select>
+            </label>
+            <label id="customActionPeriodField" class="field-label">Период
+              <select id="customActionPeriod" class="field-input">
+                <option value="last_hour">Последний час</option>
+                <option value="today">Сегодня</option>
+                <option value="yesterday">Вчера</option>
+                <option value="since_last_run">С последнего запуска</option>
+                <option value="manual">Вручную</option>
+              </select>
+            </label>
+            <label id="customActionMaxItemsField" class="field-label">Максимум писем
+              <input id="customActionMaxItems" class="field-input" type="number" min="1" max="100" value="20">
+            </label>
+            <label id="customActionManualFromField" class="field-label" hidden>Начало периода
+              <input id="customActionManualFrom" class="field-input" type="datetime-local">
+            </label>
+            <label id="customActionManualToField" class="field-label" hidden>Конец периода
+              <input id="customActionManualTo" class="field-input" type="datetime-local">
+            </label>
+          </div>
+          <div class="field-row">
+            <label id="customActionFullBodiesField"><input id="customActionFullBodies" type="checkbox" checked> Полные тела писем</label>
+            <label id="customActionAttachmentsField"><input id="customActionAttachments" type="checkbox"> Вложения/метаданные</label>
+          </div>
+          <label class="field-label">Результат
+            <select id="customActionOutput" class="field-input">
+              <option value="chat">Показать в чате</option>
+              <option value="create_draft">Создать черновик</option>
+              <option value="export_pdf">Экспорт PDF</option>
+              <option value="export_excel">Экспорт Excel</option>
             </select>
           </label>
-          <label class="field-label">Фильтр
-            <select id="customActionFilter" class="field-input">
-              <option value="all">Все</option>
-              <option value="unread">Непрочитанные</option>
-              <option value="read">Прочитанные</option>
-            </select>
-          </label>
-          <label class="field-label">Период
-            <select id="customActionPeriod" class="field-input">
-              <option value="last_hour">Последний час</option>
-              <option value="today">Сегодня</option>
-              <option value="yesterday">Вчера</option>
-              <option value="since_last_run">С последнего запуска</option>
-              <option value="manual">Вручную</option>
-            </select>
-          </label>
-          <label class="field-label">Max items
-            <input id="customActionMaxItems" class="field-input" type="number" min="1" max="100" value="20">
-          </label>
+          <div id="customActionToolsField" class="custom-action-tools-field" hidden>
+            <div class="field-label">Доступные tools</div>
+            <div id="customActionTools" class="custom-action-tools"></div>
+          </div>
         </div>
-        <div class="field-row">
-          <label><input id="customActionFullBodies" type="checkbox" checked> Полные тела писем</label>
-          <label><input id="customActionAttachments" type="checkbox"> Вложения/метаданные</label>
-        </div>
-        <label class="field-label">Результат
-          <select id="customActionOutput" class="field-input">
-            <option value="chat">Показать в чате</option>
-            <option value="create_draft">Создать черновик</option>
-            <option value="export_pdf">Экспорт PDF</option>
-            <option value="export_excel">Экспорт Excel</option>
-          </select>
-        </label>
         <div class="custom-action-footer">
           <button id="btnCustomActionCancel" class="btn btn-ghost" type="button">Отмена</button>
           <button id="btnCustomActionSave" class="btn btn-primary" type="button">Добавить</button>
+        </div>
+      </div>
+    </div>
+    <div id="customActionMenu" class="custom-action-menu" role="menu" hidden>
+      <button id="btnCustomActionEdit" type="button" role="menuitem">Изменить</button>
+      <button id="btnCustomActionDelete" type="button" role="menuitem" class="danger">Удалить</button>
+    </div>
+    <div id="customActionDeleteDialog" class="confirm-dialog" hidden>
+      <div class="confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="customActionDeleteTitle">
+        <div id="customActionDeleteTitle" class="confirm-title">Удалить действие?</div>
+        <div id="customActionDeleteText" class="confirm-text"></div>
+        <div class="confirm-actions">
+          <button id="btnCustomActionDeleteCancel" class="btn btn-ghost" type="button">Отмена</button>
+          <button id="btnCustomActionDeleteConfirm" class="btn btn-danger" type="button">Удалить</button>
         </div>
       </div>
     </div>

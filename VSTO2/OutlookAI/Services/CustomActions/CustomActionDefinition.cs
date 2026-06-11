@@ -16,6 +16,7 @@ namespace OutlookAI.Services.CustomActions
         public CustomActionContext Context { get; set; }
         public string Output { get; set; }
         public bool AllowTools { get; set; }
+        public string[] AllowedTools { get; set; }
     }
 
     public sealed class CustomActionContext

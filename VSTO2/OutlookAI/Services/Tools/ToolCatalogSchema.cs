@@ -1,4 +1,5 @@
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 
 namespace OutlookAI.Services.Tools
 {
@@ -11,7 +12,14 @@ namespace OutlookAI.Services.Tools
     {
         public static JArray BuildChatCompletionsToolsArray(bool includeWriteTools)
         {
-            var responsesTools = BuildResponsesToolsArray(includeWriteTools);
+            return BuildChatCompletionsToolsArray(includeWriteTools, null);
+        }
+
+        public static JArray BuildChatCompletionsToolsArray(
+            bool includeWriteTools,
+            IEnumerable<string> allowedToolNames)
+        {
+            var responsesTools = BuildResponsesToolsArray(includeWriteTools, allowedToolNames);
             var arr = new JArray();
             foreach (var token in responsesTools)
             {
@@ -34,6 +42,15 @@ namespace OutlookAI.Services.Tools
         public static JArray BuildResponsesToolsArray(bool includeWriteTools)
         {
             return ToolManifestCatalog.Default.BuildResponsesToolsArray(includeWriteTools);
+        }
+
+        public static JArray BuildResponsesToolsArray(
+            bool includeWriteTools,
+            IEnumerable<string> allowedToolNames)
+        {
+            return ToolManifestCatalog.Default.BuildResponsesToolsArray(
+                includeWriteTools,
+                allowedToolNames);
         }
     }
 }

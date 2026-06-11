@@ -46,12 +46,31 @@
   var $customActionFilter = document.getElementById('customActionFilter');
   var $customActionPeriod = document.getElementById('customActionPeriod');
   var $customActionMaxItems = document.getElementById('customActionMaxItems');
+  var $customActionManualFrom = document.getElementById('customActionManualFrom');
+  var $customActionManualTo = document.getElementById('customActionManualTo');
+  var $customActionFilterField = document.getElementById('customActionFilterField');
+  var $customActionPeriodField = document.getElementById('customActionPeriodField');
+  var $customActionMaxItemsField = document.getElementById('customActionMaxItemsField');
+  var $customActionManualFromField = document.getElementById('customActionManualFromField');
+  var $customActionManualToField = document.getElementById('customActionManualToField');
   var $customActionFullBodies = document.getElementById('customActionFullBodies');
+  var $customActionFullBodiesField = document.getElementById('customActionFullBodiesField');
   var $customActionAttachments = document.getElementById('customActionAttachments');
+  var $customActionAttachmentsField = document.getElementById('customActionAttachmentsField');
   var $customActionOutput = document.getElementById('customActionOutput');
+  var $customActionToolsField = document.getElementById('customActionToolsField');
+  var $customActionTools = document.getElementById('customActionTools');
+  var $customActionTitle = document.getElementById('customActionTitle');
   var $btnCustomActionClose = document.getElementById('btnCustomActionClose');
   var $btnCustomActionCancel = document.getElementById('btnCustomActionCancel');
   var $btnCustomActionSave = document.getElementById('btnCustomActionSave');
+  var $customActionMenu = document.getElementById('customActionMenu');
+  var $btnCustomActionEdit = document.getElementById('btnCustomActionEdit');
+  var $btnCustomActionDelete = document.getElementById('btnCustomActionDelete');
+  var $customActionDeleteDialog = document.getElementById('customActionDeleteDialog');
+  var $customActionDeleteText = document.getElementById('customActionDeleteText');
+  var $btnCustomActionDeleteCancel = document.getElementById('btnCustomActionDeleteCancel');
+  var $btnCustomActionDeleteConfirm = document.getElementById('btnCustomActionDeleteConfirm');
 
   // -- Bridge to host ----------------------------------------------
   function postToHost(obj) {
@@ -397,37 +416,162 @@
 
   var assistantMessages = {}; // id -> { container, content, raw }
   var toolCards = {};         // callId -> element
-  var isCtrlDown = false;
-  var selectedCustomActionId = null;
+  var customActionsById = {};
+  var editingCustomActionId = null;
+  var contextCustomActionId = null;
+  var pendingDeleteCustomActionId = null;
+  var customActionToolCatalog = [];
 
-  function setSelectedCustomAction(id) {
-    selectedCustomActionId = id || null;
-    if (!$quickActions) return;
-    var chips = $quickActions.querySelectorAll('.qa-chip-custom');
-    for (var i = 0; i < chips.length; i++) {
-      var isSelected = selectedCustomActionId && chips[i].dataset.actionId === selectedCustomActionId;
-      chips[i].classList.toggle('is-selected', !!isSelected);
-    }
+  function toolDisplayName(name) {
+    var labels = {
+      outlook_get_current_compose_state: 'Открытое письмо',
+      outlook_get_current_selection: 'Выбранные письма',
+      outlook_list_folders: 'Список папок',
+      outlook_search_messages: 'Поиск писем',
+      outlook_read_message: 'Чтение письма',
+      outlook_read_messages: 'Чтение нескольких писем',
+      outlook_count_messages: 'Подсчет писем',
+      outlook_aggregate_messages: 'Группировка писем',
+      outlook_list_recent_threads_with: 'Недавние переписки',
+      outlook_export_excel: 'Экспорт Excel',
+      outlook_export_pdf: 'Экспорт PDF',
+      outlook_export_search_results: 'Экспорт результатов поиска',
+      outlook_create_draft: 'Создание черновика',
+      outlook_mark_as_read: 'Изменение статуса прочтения',
+      outlook_flag_message: 'Флаг письма',
+      outlook_set_category: 'Категория письма'
+    };
+    return labels[name] || name;
   }
 
-  function openCustomActionDialog() {
+  function renderCustomActionTools(selectedNames) {
+    if (!$customActionTools || !$customActionToolsField) return;
+    var selected = {};
+    (selectedNames || []).forEach(function(name) { selected[name] = true; });
+    while ($customActionTools.firstChild) $customActionTools.removeChild($customActionTools.firstChild);
+    setFieldVisible($customActionToolsField, customActionToolCatalog.length > 0);
+
+    customActionToolCatalog.forEach(function(tool) {
+      var label = elt('label', 'custom-action-tool');
+      label.title = tool.description || tool.name;
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = tool.name;
+      checkbox.checked = !!selected[tool.name];
+      checkbox.dataset.toolName = tool.name;
+      label.appendChild(checkbox);
+      label.appendChild(elt('span', 'custom-action-tool-name', toolDisplayName(tool.name)));
+      label.appendChild(elt(
+        'span',
+        'custom-action-tool-access' + (tool.is_write ? ' write' : ''),
+        tool.is_write ? 'изменяет Outlook' : 'чтение'));
+      $customActionTools.appendChild(label);
+    });
+  }
+
+  function selectedCustomActionTools() {
+    if (!$customActionTools) return [];
+    var result = [];
+    var checked = $customActionTools.querySelectorAll('input[type="checkbox"]:checked');
+    for (var i = 0; i < checked.length; i++) {
+      result.push(checked[i].value);
+    }
+    return result;
+  }
+
+  function setFieldVisible(field, visible) {
+    if (field) field.hidden = !visible;
+  }
+
+  function updateCustomActionFieldVisibility() {
+    var source = $customActionSource ? $customActionSource.value : 'current_selection';
+    var isFolderSource = source === 'current_folder' || source === 'all_folders';
+    var hasMultipleItems = source !== 'current_open_message';
+    var isManualRange = isFolderSource && $customActionPeriod && $customActionPeriod.value === 'manual';
+    var attachmentsAffectContext = !isFolderSource
+      || ($customActionFullBodies && $customActionFullBodies.checked);
+
+    setFieldVisible($customActionFilterField, isFolderSource);
+    setFieldVisible($customActionPeriodField, isFolderSource);
+    setFieldVisible($customActionMaxItemsField, hasMultipleItems);
+    setFieldVisible($customActionManualFromField, isManualRange);
+    setFieldVisible($customActionManualToField, isManualRange);
+    setFieldVisible($customActionFullBodiesField, true);
+    setFieldVisible($customActionAttachmentsField, attachmentsAffectContext);
+  }
+
+  function toLocalDateTimeInput(value) {
+    if (!value) return '';
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return '';
+    var offsetMs = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+  }
+
+  function toIsoDateTime(value) {
+    if (!value) return null;
+    var date = new Date(value);
+    return isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  function openCustomActionDialog(action) {
     if (!$customActionDialog) return;
-    $customActionName.value = '';
-    $customActionHint.value = '';
-    $customActionPrompt.value = '';
-    $customActionSource.value = 'current_selection';
-    $customActionFilter.value = 'all';
-    $customActionPeriod.value = 'today';
-    $customActionMaxItems.value = '20';
-    $customActionFullBodies.checked = true;
-    $customActionAttachments.checked = false;
-    $customActionOutput.value = 'chat';
+    action = action || null;
+    editingCustomActionId = action && action.id ? action.id : null;
+    $customActionTitle.textContent = editingCustomActionId ? 'Изменить действие' : 'Новое действие';
+    $btnCustomActionSave.textContent = editingCustomActionId ? 'Сохранить' : 'Добавить';
+    $customActionName.value = action && action.label || '';
+    $customActionHint.value = action && action.description || '';
+    $customActionPrompt.value = action && action.action_prompt || '';
+    $customActionSource.value = action && action.source || 'current_selection';
+    $customActionFilter.value = action && action.read_filter || 'all';
+    $customActionPeriod.value = action && action.time_range || 'today';
+    $customActionMaxItems.value = action && action.max_items || '20';
+    $customActionManualFrom.value = toLocalDateTimeInput(action && action.manual_from);
+    $customActionManualTo.value = toLocalDateTimeInput(action && action.manual_to);
+    $customActionFullBodies.checked = action ? action.include_full_bodies !== false : true;
+    $customActionAttachments.checked = !!(action && action.include_attachments);
+    $customActionOutput.value = action && action.output || 'chat';
+    renderCustomActionTools(action && action.allowed_tools || []);
+    updateCustomActionFieldVisibility();
     $customActionDialog.hidden = false;
     try { $customActionName.focus(); } catch (e) { /* best-effort */ }
   }
 
   function closeCustomActionDialog() {
     if ($customActionDialog) $customActionDialog.hidden = true;
+    editingCustomActionId = null;
+  }
+
+  function closeCustomActionMenu() {
+    if ($customActionMenu) $customActionMenu.hidden = true;
+    contextCustomActionId = null;
+  }
+
+  function openCustomActionMenu(actionId, clientX, clientY) {
+    if (!$customActionMenu || !customActionsById[actionId]) return;
+    contextCustomActionId = actionId;
+    $customActionMenu.hidden = false;
+    var width = $customActionMenu.offsetWidth || 140;
+    var height = $customActionMenu.offsetHeight || 72;
+    var left = Math.max(4, Math.min(clientX, window.innerWidth - width - 4));
+    var top = Math.max(4, Math.min(clientY, window.innerHeight - height - 4));
+    $customActionMenu.style.left = left + 'px';
+    $customActionMenu.style.top = top + 'px';
+  }
+
+  function openDeleteConfirmation(actionId) {
+    var action = customActionsById[actionId];
+    if (!action || !$customActionDeleteDialog) return;
+    pendingDeleteCustomActionId = actionId;
+    $customActionDeleteText.textContent = 'Действие «' + action.label + '» будет удалено без возможности восстановления.';
+    $customActionDeleteDialog.hidden = false;
+    try { $btnCustomActionDeleteCancel.focus(); } catch (e) { /* best-effort */ }
+  }
+
+  function closeDeleteConfirmation() {
+    pendingDeleteCustomActionId = null;
+    if ($customActionDeleteDialog) $customActionDeleteDialog.hidden = true;
   }
 
   function saveCustomActionFromDialog() {
@@ -441,30 +585,50 @@
     var maxItems = parseInt($customActionMaxItems && $customActionMaxItems.value || '20', 10);
     if (!isFinite(maxItems) || maxItems < 1) maxItems = 20;
     if (maxItems > 100) maxItems = 100;
+    var source = $customActionSource ? $customActionSource.value : 'current_selection';
+    var isFolderSource = source === 'current_folder' || source === 'all_folders';
+    var readFilter = isFolderSource && $customActionFilter ? $customActionFilter.value : 'all';
+    var timeRange = isFolderSource && $customActionPeriod ? $customActionPeriod.value : 'today';
+    var manualFrom = timeRange === 'manual'
+      ? toIsoDateTime($customActionManualFrom && $customActionManualFrom.value)
+      : null;
+    var manualTo = timeRange === 'manual'
+      ? toIsoDateTime($customActionManualTo && $customActionManualTo.value)
+      : null;
+    var includeAttachments = (!isFolderSource || ($customActionFullBodies && $customActionFullBodies.checked))
+      ? !!($customActionAttachments && $customActionAttachments.checked)
+      : false;
+    if (timeRange === 'manual' && (!manualFrom || !manualTo)) {
+      api.showError('Укажите начало и конец ручного периода.');
+      return;
+    }
+    if (manualFrom && manualTo && new Date(manualFrom).getTime() > new Date(manualTo).getTime()) {
+      api.showError('Начало периода должно быть раньше его окончания.');
+      return;
+    }
+    var allowedTools = selectedCustomActionTools();
 
     postToHost({
       type: 'custom_action_create',
       payload: {
+        id: editingCustomActionId,
         title: title,
         description: ($customActionHint && $customActionHint.value || '').trim(),
         prompt: prompt,
-        source: $customActionSource ? $customActionSource.value : 'current_selection',
-        read_filter: $customActionFilter ? $customActionFilter.value : 'all',
-        time_range: $customActionPeriod ? $customActionPeriod.value : 'today',
-        max_items: maxItems,
+        source: source,
+        read_filter: readFilter,
+        time_range: timeRange,
+        manual_from: manualFrom,
+        manual_to: manualTo,
+        max_items: source === 'current_open_message' ? 1 : maxItems,
         include_full_bodies: !!($customActionFullBodies && $customActionFullBodies.checked),
-        include_attachments: !!($customActionAttachments && $customActionAttachments.checked),
+        include_attachments: includeAttachments,
         output: $customActionOutput ? $customActionOutput.value : 'chat',
-        allow_tools: false
+        allow_tools: allowedTools.length > 0,
+        allowed_tools: allowedTools
       }
     });
     closeCustomActionDialog();
-  }
-
-  function isTextEditingElement(node) {
-    if (!node || !node.tagName) return false;
-    var tag = String(node.tagName).toLowerCase();
-    return tag === 'input' || tag === 'textarea' || tag === 'select' || node.isContentEditable;
   }
 
   // -- Public API --------------------------------------------------
@@ -746,15 +910,19 @@
     setQuickActions: function(chips, options) {
       if (!$quickActions) return;
       var autoSubmit = !(options && options.autoSubmit === false);
+      customActionToolCatalog = options && options.customActionTools || [];
       while ($quickActions.firstChild) $quickActions.removeChild($quickActions.firstChild);
-      setSelectedCustomAction(null);
+      customActionsById = {};
+      closeCustomActionMenu();
       if (options && options.allowCustomActionManagement) {
         var add = document.createElement('button');
         add.type = 'button';
         add.className = 'qa-chip qa-chip-add';
         add.textContent = '+';
         add.title = 'Добавить действие';
-        add.addEventListener('click', openCustomActionDialog);
+        add.addEventListener('click', function() {
+          openCustomActionDialog(null);
+        });
         $quickActions.appendChild(add);
       }
       (chips || []).forEach(function(chip) {
@@ -766,14 +934,11 @@
         if (chip.type === 'custom_action') {
           btn.className += ' qa-chip-custom';
           btn.dataset.actionId = chip.id || '';
-          btn.addEventListener('mouseenter', function(evt) {
-            if (isCtrlDown || evt.ctrlKey) {
-              btn.classList.add('ctrl-hover');
-              setSelectedCustomAction(btn.dataset.actionId);
-            }
-          });
-          btn.addEventListener('mouseleave', function() {
-            btn.classList.remove('ctrl-hover');
+          customActionsById[chip.id] = chip;
+          btn.addEventListener('contextmenu', function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            openCustomActionMenu(chip.id, evt.clientX, evt.clientY);
           });
         }
         btn.addEventListener('click', function() {
@@ -881,9 +1046,41 @@
   if ($btnCustomActionClose) $btnCustomActionClose.addEventListener('click', closeCustomActionDialog);
   if ($btnCustomActionCancel) $btnCustomActionCancel.addEventListener('click', closeCustomActionDialog);
   if ($btnCustomActionSave) $btnCustomActionSave.addEventListener('click', saveCustomActionFromDialog);
-  if ($customActionDialog) {
-    $customActionDialog.addEventListener('click', function(e) {
-      if (e.target === $customActionDialog) closeCustomActionDialog();
+  if ($customActionSource) $customActionSource.addEventListener('change', updateCustomActionFieldVisibility);
+  if ($customActionPeriod) $customActionPeriod.addEventListener('change', updateCustomActionFieldVisibility);
+  if ($customActionFullBodies) $customActionFullBodies.addEventListener('change', updateCustomActionFieldVisibility);
+  if ($btnCustomActionEdit) {
+    $btnCustomActionEdit.addEventListener('click', function() {
+      var action = customActionsById[contextCustomActionId];
+      closeCustomActionMenu();
+      if (action) openCustomActionDialog(action);
+    });
+  }
+  if ($btnCustomActionDelete) {
+    $btnCustomActionDelete.addEventListener('click', function() {
+      var actionId = contextCustomActionId;
+      closeCustomActionMenu();
+      if (actionId) openDeleteConfirmation(actionId);
+    });
+  }
+  if ($btnCustomActionDeleteCancel) {
+    $btnCustomActionDeleteCancel.addEventListener('click', closeDeleteConfirmation);
+  }
+  if ($btnCustomActionDeleteConfirm) {
+    $btnCustomActionDeleteConfirm.addEventListener('click', function() {
+      var actionId = pendingDeleteCustomActionId;
+      closeDeleteConfirmation();
+      if (actionId) {
+        postToHost({
+          type: 'custom_action_delete',
+          payload: { id: actionId }
+        });
+      }
+    });
+  }
+  if ($customActionDeleteDialog) {
+    $customActionDeleteDialog.addEventListener('click', function(e) {
+      if (e.target === $customActionDeleteDialog) closeDeleteConfirmation();
     });
   }
 
@@ -896,41 +1093,30 @@
   });
 
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'Control') {
-      isCtrlDown = true;
-      if ($quickActions) {
-        var hovered = $quickActions.querySelector('.qa-chip-custom:hover');
-        if (hovered && hovered.dataset.actionId) {
-          hovered.classList.add('ctrl-hover');
-          setSelectedCustomAction(hovered.dataset.actionId);
-        }
-      }
-    }
     if (e.key === 'Escape' && $customActionDialog && !$customActionDialog.hidden) {
       e.preventDefault();
       closeCustomActionDialog();
       return;
     }
-    if ((e.key === 'Delete' || e.key === 'Del') && selectedCustomActionId && !isTextEditingElement(e.target)) {
+    if (e.key === 'Escape' && $customActionDeleteDialog && !$customActionDeleteDialog.hidden) {
       e.preventDefault();
-      postToHost({
-        type: 'custom_action_delete',
-        payload: { id: selectedCustomActionId }
-      });
-      setSelectedCustomAction(null);
+      closeDeleteConfirmation();
+      return;
+    }
+    if (e.key === 'Escape' && $customActionMenu && !$customActionMenu.hidden) {
+      e.preventDefault();
+      closeCustomActionMenu();
     }
   });
 
-  document.addEventListener('keyup', function(e) {
-    if (e.key === 'Control') {
-      isCtrlDown = false;
-      if ($quickActions) {
-        var chips = $quickActions.querySelectorAll('.qa-chip-custom');
-        for (var i = 0; i < chips.length; i++) {
-          chips[i].classList.remove('ctrl-hover');
-        }
-      }
+  document.addEventListener('click', function(e) {
+    if ($customActionMenu && !$customActionMenu.hidden && !$customActionMenu.contains(e.target)) {
+      closeCustomActionMenu();
     }
+  });
+
+  window.addEventListener('blur', function() {
+    closeCustomActionMenu();
   });
 
   // Tell the host we're ready so it can push the initial context strip

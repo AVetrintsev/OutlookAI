@@ -34,9 +34,11 @@ namespace OutlookAI.Services.CustomActions
 
         public async Task<CustomActionRunResult> RunAsync(
             CustomActionDefinition action,
-            CancellationToken ct)
+            CancellationToken ct,
+            ChatEventSink sink = null)
         {
             if (action == null) throw new ArgumentNullException(nameof(action));
+            sink = sink ?? new ChatEventSink();
 
             var context = BuildContext(action, ct);
             if (IsMissingContext(context))
@@ -65,7 +67,7 @@ namespace OutlookAI.Services.CustomActions
                     },
                     userMessage,
                     _toolHost,
-                    new ChatEventSink(),
+                    sink,
                     ct).ConfigureAwait(false);
                 text = turn.FinalAssistantText ?? "";
             }
@@ -74,6 +76,7 @@ namespace OutlookAI.Services.CustomActions
                 text = await _chat.CompleteWithoutToolsAsync(
                     PromptCatalog.Default.Get("custom_action_controlled"),
                     userMessage,
+                    sink,
                     ct).ConfigureAwait(false);
             }
 

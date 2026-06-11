@@ -1054,6 +1054,19 @@ namespace OutlookAI.Services
             string userMessage,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            return await CompleteWithoutToolsAsync(
+                systemInstructions,
+                userMessage,
+                new ChatEventSink(),
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<string> CompleteWithoutToolsAsync(
+            string systemInstructions,
+            string userMessage,
+            ChatEventSink sink,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
             var messages = new JArray(
                 new JObject(
                     new JProperty("role", "system"),
@@ -1064,7 +1077,11 @@ namespace OutlookAI.Services
             var body = BuildBaseChatBody(messages, stream: true);
 
             var output = new StringBuilder();
-            await SendChatCompletionAsync(body, output, new ChatEventSink(), cancellationToken).ConfigureAwait(false);
+            await SendChatCompletionAsync(
+                body,
+                output,
+                sink ?? new ChatEventSink(),
+                cancellationToken).ConfigureAwait(false);
             return output.ToString().Trim();
         }
 

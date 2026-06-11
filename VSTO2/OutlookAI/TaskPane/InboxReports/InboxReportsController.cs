@@ -68,7 +68,13 @@ namespace OutlookAI.TaskPane.InboxReports
                              "https://developer.microsoft.com/microsoft-edge/webview2/");
                 return;
             }
-            _webView = new WebView2 { Dock = DockStyle.Fill };
+            var themeBackground = OfficeThemeDetector.GetBackgroundColor();
+            _hostContainer.BackColor = themeBackground;
+            _webView = new WebView2
+            {
+                Dock = DockStyle.Fill,
+                DefaultBackgroundColor = themeBackground
+            };
             _hostContainer.Controls.Clear();
             _hostContainer.Controls.Add(_webView);
 
@@ -150,6 +156,9 @@ namespace OutlookAI.TaskPane.InboxReports
                         var clip = _store.ExportForClipboard();
                         try { Clipboard.SetText(clip ?? ""); } catch { }
                         break;
+                    case "theme_request":
+                        PushTheme();
+                        break;
                 }
             }
             catch (Exception ex)
@@ -165,10 +174,16 @@ namespace OutlookAI.TaskPane.InboxReports
         {
             TraceLog.Write("OnWebViewReady entered", "InboxReports");
             _isReady = true;
-            _ = RunScript("outlookai.applyTheme('light');");
+            PushTheme();
             PushReasoningOptions();
             PushReportChips();
             TraceLog.Write("OnWebViewReady completed", "InboxReports");
+        }
+
+        private void PushTheme()
+        {
+            _ = RunScript("outlookai.applyTheme(" +
+                JsString(OfficeThemeDetector.GetThemeName()) + ");");
         }
 
         private void PushReasoningOptions()

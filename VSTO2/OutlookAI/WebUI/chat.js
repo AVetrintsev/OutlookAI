@@ -34,6 +34,7 @@
   var $btnClear = document.getElementById('btnClear');
   var $btnCopy = document.getElementById('btnCopy');
   var $reasoning = document.getElementById('reasoningSelect');
+  var $composerResizer = document.getElementById('composerResizer');
   var $ctxSubject = document.getElementById('ctxSubject');
   var $ctxRecipients = document.getElementById('ctxRecipients');
   var $ctxThread = document.getElementById('ctxThread');
@@ -647,19 +648,35 @@
       node.dataset.messageId = id;
       node.dataset.state = 'streaming';
       node.classList.add('is-streaming');
-      var exportButton = createExportPdfButton(id);
-      node.appendChild(exportButton);
       var content = elt('div', 'msg-content');
       content.innerHTML = renderMarkdown(initialText || '');
       node.appendChild(content);
+      var loading = elt('div', 'msg-loading');
+      loading.setAttribute('role', 'status');
+      loading.setAttribute('aria-label', 'Формируется ответ');
+      loading.appendChild(elt('span', 'msg-loading-label', 'Формирую ответ'));
+      loading.appendChild(elt('span', 'msg-loading-dots', ''));
+      node.appendChild(loading);
+      var footer = elt('div', 'msg-footer');
+      var source = elt('div', 'msg-source');
+      source.appendChild(elt('span', 'msg-source-mark', '✦'));
+      source.appendChild(elt('span', '', 'Ответ OutlookAI'));
+      footer.appendChild(source);
+      var exportButton = createExportPdfButton(id);
+      footer.appendChild(exportButton);
+      node.appendChild(footer);
       $messages.appendChild(node);
       assistantMessages[id] = {
         container: node,
         content: content,
         raw: initialText || '',
         complete: false,
+        loading: loading,
         exportButton: exportButton
       };
+      if (initialText) {
+        node.classList.add('has-content');
+      }
       scrollToBottom();
     },
 
@@ -669,7 +686,9 @@
         api.appendAssistantMessage(id, delta);
         return;
       }
+      if (!delta) return;
       entry.raw += delta;
+      entry.container.classList.add('has-content');
       // For streaming, render the running text as markdown. This is
       // cheap enough for typical email-length replies.
       entry.content.innerHTML = renderMarkdown(entry.raw);
@@ -683,6 +702,11 @@
       entry.complete = true;
       entry.container.dataset.state = 'complete';
       entry.container.classList.remove('is-streaming');
+      if (!entry.raw) {
+        entry.content.textContent = opts.stopped
+          ? 'Ответ остановлен.'
+          : (opts.error ? 'Не удалось получить ответ.' : '');
+      }
       if (opts.stopped) entry.container.classList.add('msg-stopped');
       if (opts.error) entry.container.classList.add('msg-error');
       resetExportButton(id);
@@ -871,25 +895,25 @@
       //   Compose shape:  { subject, recipients, thread }
       // Disambiguate by checking for ctx.folder.
       if (ctx.folder !== undefined) {
-        var unread = (ctx.unread_count != null) ? (' (' + ctx.unread_count + ' непрочит.)') : '';
+        var unread = (ctx.unread_count != null) ? (' · ' + ctx.unread_count + ' непрочит.') : '';
         $ctxSubject.textContent = 'Папка: ' + ctx.folder + unread;
         if (ctx.selection && ctx.selection.count > 0) {
           if (ctx.selection.count === 1) {
-            $ctxRecipients.textContent = 'Выбрано: ' + (ctx.selection.subject || '') +
+            $ctxRecipients.textContent = 'Письмо: ' + (ctx.selection.subject || 'Без темы') +
               (ctx.selection.from ? (' \u2014 ' + ctx.selection.from) : '');
           } else {
-            $ctxRecipients.textContent = 'Выбрано сообщений: ' + ctx.selection.count;
+            $ctxRecipients.textContent = 'Выбрано писем: ' + ctx.selection.count;
           }
         } else {
-          $ctxRecipients.textContent = '';
+          $ctxRecipients.textContent = 'Выберите письмо, чтобы добавить его в контекст.';
         }
         $ctxThread.textContent = '';
         return;
       }
       // Compose shape (Phase 2 behaviour unchanged).
-      $ctxSubject.textContent = ctx.subject ? ('Re: ' + ctx.subject) : 'Новое письмо';
+      $ctxSubject.textContent = ctx.subject ? ('Письмо: ' + ctx.subject) : 'Новое письмо';
       var recipients = (ctx.recipients || []).join(', ');
-      $ctxRecipients.textContent = recipients ? ('Кому: ' + recipients) : '';
+      $ctxRecipients.textContent = recipients ? ('Получатели: ' + recipients) : 'Получатели не указаны';
       $ctxThread.textContent = ctx.thread || '';
     },
 
@@ -982,7 +1006,7 @@
       while ($reasoning.firstChild) $reasoning.removeChild($reasoning.firstChild);
       var def = document.createElement('option');
       def.value = '';
-      def.textContent = '(по умолчанию)';
+      def.textContent = 'На основе контекста письма';
       $reasoning.appendChild(def);
       (opts || []).forEach(function(name) {
         var el = document.createElement('option');
@@ -1033,6 +1057,50 @@
     });
   }
 
+  function setComposerInputHeight(height) {
+    var minHeight = 64;
+    var maxHeight = Math.max(minHeight, Math.min(300, Math.floor(window.innerHeight * 0.45)));
+    var nextHeight = Math.max(minHeight, Math.min(maxHeight, Math.round(height)));
+    $input.style.height = nextHeight + 'px';
+    if ($composerResizer) {
+      $composerResizer.setAttribute('aria-valuemin', String(minHeight));
+      $composerResizer.setAttribute('aria-valuemax', String(maxHeight));
+      $composerResizer.setAttribute('aria-valuenow', String(nextHeight));
+    }
+  }
+
+  if ($composerResizer) {
+    $composerResizer.addEventListener('pointerdown', function(e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      var startY = e.clientY;
+      var startHeight = $input.getBoundingClientRect().height;
+      $composerResizer.classList.add('is-dragging');
+      try { $composerResizer.setPointerCapture(e.pointerId); } catch (ignore) {}
+
+      function move(moveEvent) {
+        setComposerInputHeight(startHeight + startY - moveEvent.clientY);
+      }
+      function stop() {
+        $composerResizer.classList.remove('is-dragging');
+        $composerResizer.removeEventListener('pointermove', move);
+        $composerResizer.removeEventListener('pointerup', stop);
+        $composerResizer.removeEventListener('pointercancel', stop);
+      }
+
+      $composerResizer.addEventListener('pointermove', move);
+      $composerResizer.addEventListener('pointerup', stop);
+      $composerResizer.addEventListener('pointercancel', stop);
+    });
+    $composerResizer.addEventListener('keydown', function(e) {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      var delta = e.key === 'ArrowUp' ? 16 : -16;
+      setComposerInputHeight($input.getBoundingClientRect().height + delta);
+    });
+    setComposerInputHeight($input.getBoundingClientRect().height);
+  }
+
   $btnSend.addEventListener('click', sendInput);
   $btnStop.addEventListener('click', function() {
     postToHost({ type: 'stop' });
@@ -1043,6 +1111,15 @@
   $btnCopy.addEventListener('click', function() {
     postToHost({ type: 'copy' });
   });
+  window.addEventListener('focus', function() {
+    postToHost({ type: 'theme_request' });
+  });
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) postToHost({ type: 'theme_request' });
+  });
+  window.setInterval(function() {
+    if (!document.hidden) postToHost({ type: 'theme_request' });
+  }, 3000);
   if ($btnCustomActionClose) $btnCustomActionClose.addEventListener('click', closeCustomActionDialog);
   if ($btnCustomActionCancel) $btnCustomActionCancel.addEventListener('click', closeCustomActionDialog);
   if ($btnCustomActionSave) $btnCustomActionSave.addEventListener('click', saveCustomActionFromDialog);

@@ -346,6 +346,7 @@
     <Compile Include="Services\Export\UnauthorizedExportPathException.cs" />
     <Compile Include="Services\IdResolver.cs" />
     <Compile Include="Services\IToolHost.cs" />
+    <Compile Include="Services\OfficeThemeDetector.cs" />
     <Compile Include="Services\OutlookThreadMarshaller.cs" />
     <Compile Include="Services\OutlookToolHost.cs" />
     <Compile Include="Services\LiteLlmVoiceService.cs" />

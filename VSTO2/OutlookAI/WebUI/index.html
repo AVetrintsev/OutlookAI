@@ -9,17 +9,55 @@
 </head>
 <body class="theme-light">
   <div id="app">
-    <div id="contextStrip" class="context-strip">
-      <div class="context-line context-subject" id="ctxSubject">Без темы</div>
-      <div class="context-line context-recipients" id="ctxRecipients"></div>
-      <div class="context-line context-thread" id="ctxThread"></div>
-    </div>
+    <header class="app-header">
+      <div class="app-identity">
+        <div class="app-mark" aria-hidden="true">✦</div>
+        <div class="app-title">AI-помощник</div>
+      </div>
+      <div class="app-header-actions">
+        <button id="btnCopy" class="header-icon-btn" type="button" title="Скопировать диалог" aria-label="Скопировать диалог">⧉</button>
+        <button id="btnClear" class="header-icon-btn" type="button" title="Очистить диалог" aria-label="Очистить диалог">×</button>
+      </div>
+    </header>
+    <section class="context-section">
+      <div class="section-label">Контекст письма</div>
+      <div id="contextStrip" class="context-strip">
+        <div class="context-line context-subject" id="ctxSubject">Без темы</div>
+        <div class="context-line context-recipients" id="ctxRecipients"></div>
+        <div class="context-line context-thread" id="ctxThread"></div>
+      </div>
+    </section>
     <div id="messages" class="messages" role="log" aria-live="polite"></div>
-    <!-- Quick-action chip row (Phase 3a). Populated by C# via
-         outlookai.setQuickActions(); collapses to zero height when empty
-         (so the compose pane, which never calls setQuickActions, looks
-         unchanged from Phase 2). -->
-    <div id="quickActions" class="quick-actions"></div>
+    <div class="bottom-zone">
+      <div id="composerResizer"
+           class="composer-resizer"
+           role="separator"
+           aria-orientation="horizontal"
+           aria-label="Изменить высоту поля ввода"
+           tabindex="0">
+        <span class="composer-resizer-grip" aria-hidden="true"></span>
+      </div>
+      <div id="quickActions" class="quick-actions"></div>
+      <div id="composer" class="composer">
+        <textarea id="composerInput"
+                  class="composer-input"
+                  rows="3"
+                  placeholder="Спросите об этом письме или переписке..."
+                  aria-label="Поле ввода чата"></textarea>
+        <div class="composer-controls">
+          <select id="reasoningSelect"
+                  class="reasoning-select"
+                  aria-label="Уровень рассуждений">
+            <option value="">На основе контекста письма</option>
+          </select>
+          <div class="composer-actions">
+            <button id="btnStop" class="send-btn stop-btn" type="button" title="Остановить" aria-label="Остановить" hidden>■</button>
+            <button id="btnSend" class="send-btn" type="button" title="Отправить" aria-label="Отправить">➤</button>
+          </div>
+        </div>
+      </div>
+      <div class="disclaimer">AI-помощник может ошибаться. Проверяйте важную информацию.</div>
+    </div>
     <div id="customActionDialog" class="custom-action-dialog" hidden>
       <div class="custom-action-panel" role="dialog" aria-modal="true" aria-labelledby="customActionTitle">
         <div class="custom-action-header">
@@ -104,26 +142,6 @@
           <button id="btnCustomActionDeleteCancel" class="btn btn-ghost" type="button">Отмена</button>
           <button id="btnCustomActionDeleteConfirm" class="btn btn-danger" type="button">Удалить</button>
         </div>
-      </div>
-    </div>
-    <div id="composer" class="composer">
-      <textarea id="composerInput"
-                class="composer-input"
-                rows="2"
-                placeholder="Спросите об этом письме или переписке..."
-                aria-label="Поле ввода чата"></textarea>
-      <div class="composer-controls">
-        <select id="reasoningSelect"
-                class="reasoning-select"
-                aria-label="Уровень рассуждений">
-          <!-- Populated by C# via outlookai.setReasoningOptions() once
-               the WebView is ready and Config.Model is known. -->
-          <option value="">(по умолчанию)</option>
-        </select>
-        <button id="btnSend" class="btn btn-primary" type="button">Отправить</button>
-        <button id="btnStop" class="btn btn-secondary" type="button" hidden>Стоп</button>
-        <button id="btnClear" class="btn btn-ghost" type="button" title="Очистить диалог">Очистить</button>
-        <button id="btnCopy" class="btn btn-ghost" type="button" title="Скопировать диалог в буфер обмена">Копировать</button>
       </div>
     </div>
   </div>

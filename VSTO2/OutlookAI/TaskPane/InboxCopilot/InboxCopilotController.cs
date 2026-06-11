@@ -72,7 +72,13 @@ namespace OutlookAI.TaskPane.InboxCopilot
                              "https://developer.microsoft.com/microsoft-edge/webview2/");
                 return;
             }
-            _webView = new WebView2 { Dock = DockStyle.Fill };
+            var themeBackground = OfficeThemeDetector.GetBackgroundColor();
+            _hostContainer.BackColor = themeBackground;
+            _webView = new WebView2
+            {
+                Dock = DockStyle.Fill,
+                DefaultBackgroundColor = themeBackground
+            };
             _hostContainer.Controls.Clear();
             _hostContainer.Controls.Add(_webView);
 
@@ -182,6 +188,9 @@ namespace OutlookAI.TaskPane.InboxCopilot
                         var clip = _store.ExportForClipboard();
                         try { Clipboard.SetText(clip ?? ""); } catch { }
                         break;
+                    case "theme_request":
+                        PushTheme();
+                        break;
                 }
             }
             catch (Exception ex)
@@ -197,10 +206,16 @@ namespace OutlookAI.TaskPane.InboxCopilot
         {
             TraceLog.Write("OnWebViewReady entered", "InboxCopilot");
             _isReady = true;
-            _ = RunScript("outlookai.applyTheme('light');");
+            PushTheme();
             PushReasoningOptions();
             PushContextStripAndChips();
             TraceLog.Write("OnWebViewReady completed", "InboxCopilot");
+        }
+
+        private void PushTheme()
+        {
+            _ = RunScript("outlookai.applyTheme(" +
+                JsString(OfficeThemeDetector.GetThemeName()) + ");");
         }
 
         private void PushReasoningOptions()
@@ -508,9 +523,13 @@ namespace OutlookAI.TaskPane.InboxCopilot
             try
             {
                 var runner = new CustomActionRunner(_chat, _surface, _toolHost);
-                var result = await runner.RunAsync(action, _activeCts.Token).ConfigureAwait(false);
-                await RunScript("outlookai.appendTextDelta(" +
-                    JsString(assistantId) + ", " + JsString(result.Text ?? "") + ");");
+                var sink = new WebViewSink(this, assistantId);
+                var result = await runner.RunAsync(action, _activeCts.Token, sink).ConfigureAwait(false);
+                if (!sink.HasReceivedText && !string.IsNullOrEmpty(result.Text))
+                {
+                    await RunScript("outlookai.appendTextDelta(" +
+                        JsString(assistantId) + ", " + JsString(result.Text) + ");");
+                }
                 if (!string.IsNullOrWhiteSpace(result.FilePath))
                 {
                     var fileInfo = new JObject(
@@ -606,6 +625,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
         {
             private readonly InboxCopilotController _owner;
             private readonly string _assistantId;
+            public bool HasReceivedText { get; private set; }
             public WebViewSink(InboxCopilotController owner, string assistantId)
             {
                 _owner = owner;
@@ -613,6 +633,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             }
             public override void OnTokenDelta(string delta)
             {
+                if (!string.IsNullOrEmpty(delta)) HasReceivedText = true;
                 _ = _owner.RunScript("outlookai.appendTextDelta(" +
                     JsString(_assistantId) + ", " + JsString(delta) + ");");
             }

@@ -77,7 +77,13 @@ namespace OutlookAI.TaskPane.Chat
             }
             TraceLog.Write("WebView2 runtime detected; constructing WebView2 control", "ChatController");
 
-            _webView = new WebView2 { Dock = DockStyle.Fill };
+            var themeBackground = OfficeThemeDetector.GetBackgroundColor();
+            _hostContainer.BackColor = themeBackground;
+            _webView = new WebView2
+            {
+                Dock = DockStyle.Fill,
+                DefaultBackgroundColor = themeBackground
+            };
             TraceLog.Write("WebView2 control constructed", "ChatController");
             _hostContainer.Controls.Clear();
             _hostContainer.Controls.Add(_webView);
@@ -181,6 +187,9 @@ namespace OutlookAI.TaskPane.Chat
                         var clip = _store.ExportForClipboard();
                         try { Clipboard.SetText(clip ?? ""); } catch { /* clipboard occasionally throws on Outlook */ }
                         break;
+                    case "theme_request":
+                        PushTheme();
+                        break;
                 }
             }
             catch (Exception ex)
@@ -196,11 +205,17 @@ namespace OutlookAI.TaskPane.Chat
         {
             TraceLog.Write("OnWebViewReady entered", "ChatController");
             _isReady = true;
-            _ = RunScript("outlookai.applyTheme('light');");
+            PushTheme();
             PushReasoningOptions();
             PushContextStripFromSurface();
             PushCustomActionChips();
             TraceLog.Write("OnWebViewReady completed", "ChatController");
+        }
+
+        private void PushTheme()
+        {
+            _ = RunScript("outlookai.applyTheme(" +
+                JsString(OfficeThemeDetector.GetThemeName()) + ");");
         }
 
         private void PushCustomActionChips()
@@ -425,9 +440,13 @@ namespace OutlookAI.TaskPane.Chat
             try
             {
                 var runner = new CustomActionRunner(_chat, _surface, _toolHost);
-                var result = await runner.RunAsync(action, _activeCts.Token).ConfigureAwait(false);
-                await RunScript("outlookai.appendTextDelta(" +
-                    JsString(assistantId) + ", " + JsString(result.Text ?? "") + ");");
+                var sink = new WebViewSink(this, assistantId);
+                var result = await runner.RunAsync(action, _activeCts.Token, sink).ConfigureAwait(false);
+                if (!sink.HasReceivedText && !string.IsNullOrEmpty(result.Text))
+                {
+                    await RunScript("outlookai.appendTextDelta(" +
+                        JsString(assistantId) + ", " + JsString(result.Text) + ");");
+                }
                 if (!string.IsNullOrWhiteSpace(result.FilePath))
                 {
                     var fileInfo = new JObject(
@@ -625,6 +644,7 @@ namespace OutlookAI.TaskPane.Chat
         {
             private readonly ChatController _owner;
             private readonly string _assistantId;
+            public bool HasReceivedText { get; private set; }
             public WebViewSink(ChatController owner, string assistantId)
             {
                 _owner = owner;
@@ -632,6 +652,7 @@ namespace OutlookAI.TaskPane.Chat
             }
             public override void OnTokenDelta(string delta)
             {
+                if (!string.IsNullOrEmpty(delta)) HasReceivedText = true;
                 TraceLog.Write("Sink.OnTokenDelta len=" + (delta?.Length ?? 0), "WebViewSink");
                 _ = _owner.RunScript(
                     "outlookai.appendTextDelta(" +

@@ -29,7 +29,8 @@ param(
     [AllowEmptyString()][string]$LiteLlmVoiceModel = "",
     [double]$Temperature = 0.2,
     [int]$MaxTokens = 4096,
-    [int]$MaxBulkExportRows = 2000
+    [int]$MaxBulkExportRows = 2000,
+    [bool]$RecommendationsEnabled = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -420,6 +421,7 @@ $v3Config = @"
   <Temperature>$Temperature</Temperature>
   <MaxTokens>$MaxTokens</MaxTokens>
   <MaxBulkExportRows>$MaxBulkExportRows</MaxBulkExportRows>
+  <RecommendationsEnabled>$($RecommendationsEnabled.ToString().ToLowerInvariant())</RecommendationsEnabled>
 </Config>
 "@
 
@@ -450,6 +452,7 @@ Write-Host "  Effective server config:" -ForegroundColor Gray
 Write-Host "    Base URL : $LiteLlmBaseUrl" -ForegroundColor Gray
 Write-Host "    Model    : $LiteLlmModel" -ForegroundColor Gray
 Write-Host "    Voice    : $LiteLlmVoiceModel" -ForegroundColor Gray
+Write-Host "    AI recommendations: $RecommendationsEnabled" -ForegroundColor Gray
 # v2.1+ release packages ship a version.json alongside Install-OutlookAI.ps1.
 # Copy it into the install dir so the in-app updater knows what is installed.
 $stagedVersionJson = Join-Path $SourcePath "version.json"
@@ -474,17 +477,54 @@ if (!(Test-Path $ProgramDataPath)) {
 Write-Host "  Granted Authenticated Users: Read/Execute on $ProgramDataPath" -ForegroundColor Gray
 Write-Host "  Done." -ForegroundColor Green
 
-# --- 7. Per-user v1 AppData cleanup --------------------------------------
-Write-Host "[7/10] Renaming per-user v1 AppData configs..." -ForegroundColor Yellow
+# --- 7. Per-user AppData config migration --------------------------------
+Write-Host "[7/10] Preserving per-user API keys..." -ForegroundColor Yellow
 $userProfiles = Get-ChildItem -Path "C:\Users" -Directory -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -notin @("Public", "Default", "Default User", "All Users") }
 $renamed = 0
+$preservedKeys = 0
 foreach ($profile in $userProfiles) {
     $userConfig = Join-Path $profile.FullName "AppData\Roaming\OutlookAI\config.xml"
     if (Test-Path $userConfig) {
         try {
             [xml]$xml = Get-Content -Path $userConfig -Raw
-            if ($xml.Config -and -not $xml.Config.LiteLlmBaseUrl) {
+            if (-not $xml.Config) {
+                continue
+            }
+
+            $apiKey = ""
+            if ($xml.Config.LiteLlmApiKey) {
+                $apiKey = [string]$xml.Config.LiteLlmApiKey
+            } elseif ($xml.Config.ApiKey) {
+                $apiKey = [string]$xml.Config.ApiKey
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($apiKey)) {
+                $reasoningEffort = if ($xml.Config.ReasoningEffort) { [string]$xml.Config.ReasoningEffort } else { "None" }
+                $writeToolsEnabled = if ($xml.Config.WriteToolsEnabled) { [string]$xml.Config.WriteToolsEnabled } else { "true" }
+                $enabledWriteTools = if ($xml.Config.EnabledWriteTools) {
+                    [string]$xml.Config.EnabledWriteTools
+                } else {
+                    "outlook_create_draft,outlook_mark_as_read,outlook_flag_message,outlook_set_category"
+                }
+
+                $xmlApiKey = [System.Security.SecurityElement]::Escape($apiKey.Trim())
+                $xmlReasoningEffort = [System.Security.SecurityElement]::Escape($reasoningEffort)
+                $xmlWriteToolsEnabled = [System.Security.SecurityElement]::Escape($writeToolsEnabled)
+                $xmlEnabledWriteTools = [System.Security.SecurityElement]::Escape($enabledWriteTools)
+
+                $userV3Config = @"
+<Config>
+  <LiteLlmApiKey>$xmlApiKey</LiteLlmApiKey>
+  <ReasoningEffort>$xmlReasoningEffort</ReasoningEffort>
+  <WriteToolsEnabled>$xmlWriteToolsEnabled</WriteToolsEnabled>
+  <EnabledWriteTools>$xmlEnabledWriteTools</EnabledWriteTools>
+</Config>
+"@
+                Set-Content -Path $userConfig -Value $userV3Config -Encoding UTF8
+                $preservedKeys++
+                Write-Host "  Preserved LiteLLM API key in $userConfig" -ForegroundColor Gray
+            } elseif (-not $xml.Config.LiteLlmBaseUrl) {
                 $renamed++
                 $renamedTarget = "$userConfig.v1.backup.$Timestamp"
                 Move-Item -Path $userConfig -Destination $renamedTarget -Force
@@ -495,7 +535,7 @@ foreach ($profile in $userProfiles) {
         }
     }
 }
-Write-Host ("  Done ({0} per-user v1 configs renamed)." -f $renamed) -ForegroundColor Green
+Write-Host ("  Done ({0} API keys preserved, {1} per-user v1 configs renamed)." -f $preservedKeys, $renamed) -ForegroundColor Green
 
 # --- 8. Microsoft Edge WebView2 Runtime --------------------------------------
 # Phase 2 chat surface uses WebView2 (Evergreen). On most modern Windows the

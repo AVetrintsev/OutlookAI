@@ -70,6 +70,26 @@ function Read-IntValue {
     }
 }
 
+function Read-BoolValue {
+    param(
+        [Parameter(Mandatory=$true)][string]$Prompt,
+        [Parameter(Mandatory=$true)][bool]$DefaultValue
+    )
+
+    $defaultText = if ($DefaultValue) { "yes" } else { "no" }
+    while ($true) {
+        $text = (Read-Value -Prompt $Prompt -DefaultValue $defaultText).ToLowerInvariant()
+        if ($text -in @("yes", "y", "true", "1", "да", "д")) {
+            return $true
+        }
+        if ($text -in @("no", "n", "false", "0", "нет", "н")) {
+            return $false
+        }
+
+        Write-Host "Enter yes or no." -ForegroundColor Yellow
+    }
+}
+
 function Read-Tag {
     while ($true) {
         $tag = Read-Value -Prompt "Release tag" -DefaultValue "v3.0.0"
@@ -227,6 +247,8 @@ try {
     $temperature = Read-DoubleValue -Prompt "Temperature" -DefaultValue ([double](Get-ConfigValue -Config $localConfig -Name "Temperature" -DefaultValue 0.2))
     $maxTokens = Read-IntValue -Prompt "Max tokens" -DefaultValue ([int](Get-ConfigValue -Config $localConfig -Name "MaxTokens" -DefaultValue 4096))
     $maxBulkExportRows = Read-IntValue -Prompt "Max bulk export rows" -DefaultValue ([int](Get-ConfigValue -Config $localConfig -Name "MaxBulkExportRows" -DefaultValue 2000))
+    $recommendationsEnabled = Read-BoolValue -Prompt "Enable AI recommendations" -DefaultValue ([System.Convert]::ToBoolean(
+        (Get-ConfigValue -Config $localConfig -Name "RecommendationsEnabled" -DefaultValue $false)))
     $certThumbprint = Read-Value -Prompt "Manifest certificate thumbprint (optional)" -DefaultValue (Get-ConfigValue -Config $localConfig -Name "CertThumbprint" -DefaultValue "")
 
     Save-LocalBuildConfig -Path $localConfigPath -Value ([ordered]@{
@@ -238,6 +260,7 @@ try {
         Temperature = $temperature
         MaxTokens = $maxTokens
         MaxBulkExportRows = $maxBulkExportRows
+        RecommendationsEnabled = $recommendationsEnabled
         CertThumbprint = $certThumbprint
     })
     Write-Host "Saved defaults to $localConfigPath" -ForegroundColor Gray
@@ -251,6 +274,7 @@ try {
         Temperature = $temperature
         MaxTokens = $maxTokens
         MaxBulkExportRows = $maxBulkExportRows
+        RecommendationsEnabled = $recommendationsEnabled
         ExeOnly = $true
     }
 

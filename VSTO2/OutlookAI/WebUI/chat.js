@@ -35,6 +35,26 @@
   var $btnCopy = document.getElementById('btnCopy');
   var $composerResizer = document.getElementById('composerResizer');
   var $quickActions = document.getElementById('quickActions');
+  var $actionWorkspace = document.getElementById('actionWorkspace');
+  var $recommendationsSection = document.getElementById('recommendationsSection');
+  var $recommendationsLoading = document.getElementById('recommendationsLoading');
+  var $actionRecommendations = document.getElementById('actionRecommendations');
+  var $actionGroups = document.getElementById('actionGroups');
+  var $actionGroupPopover = document.getElementById('actionGroupPopover');
+  var $actionGroupEditor = document.getElementById('actionGroupEditor');
+  var $groupEditorTitle = document.getElementById('groupEditorTitle');
+  var $groupEditorActions = document.getElementById('groupEditorActions');
+  var $btnGroupEditorClose = document.getElementById('btnGroupEditorClose');
+  var $btnGroupAddAction = document.getElementById('btnGroupAddAction');
+  var $btnGroupImport = document.getElementById('btnGroupImport');
+  var $btnGroupExport = document.getElementById('btnGroupExport');
+  var $btnGroupReset = document.getElementById('btnGroupReset');
+  var $groupImportFile = document.getElementById('groupImportFile');
+  var $groupImportPanel = document.getElementById('groupImportPanel');
+  var $groupImportText = document.getElementById('groupImportText');
+  var $btnGroupImportFile = document.getElementById('btnGroupImportFile');
+  var $btnGroupImportCancel = document.getElementById('btnGroupImportCancel');
+  var $btnGroupImportApply = document.getElementById('btnGroupImportApply');
   var $customActionDialog = document.getElementById('customActionDialog');
   var $customActionName = document.getElementById('customActionName');
   var $customActionHint = document.getElementById('customActionHint');
@@ -412,6 +432,10 @@
   var contextAssistantMessageId = null;
   var pendingDeleteCustomActionId = null;
   var customActionToolCatalog = [];
+  var actionCatalogGroups = [];
+  var recommendationsEnabled = false;
+  var activeActionGroupId = null;
+  var editingActionGroupId = null;
 
   function toolDisplayName(name) {
     var labels = {
@@ -509,6 +533,7 @@
     if (!$customActionDialog) return;
     action = action || null;
     editingCustomActionId = action && action.id ? action.id : null;
+    if (action && action.group_id) editingActionGroupId = action.group_id;
     $customActionTitle.textContent = editingCustomActionId ? 'Изменить действие' : 'Новое действие';
     $btnCustomActionSave.textContent = editingCustomActionId ? 'Сохранить' : 'Добавить';
     $customActionName.value = action && action.label || '';
@@ -631,6 +656,7 @@
       type: 'custom_action_create',
       payload: {
         id: editingCustomActionId,
+        group_id: editingActionGroupId,
         title: title,
         description: ($customActionHint && $customActionHint.value || '').trim(),
         prompt: prompt,
@@ -648,6 +674,162 @@
       }
     });
     closeCustomActionDialog();
+  }
+
+  function actionById(actionId) {
+    return customActionsById[actionId] || null;
+  }
+
+  function groupById(groupId) {
+    for (var i = 0; i < actionCatalogGroups.length; i++) {
+      if (actionCatalogGroups[i].id === groupId) return actionCatalogGroups[i];
+    }
+    return null;
+  }
+
+  function runCustomAction(actionId) {
+    if (!actionId) return;
+    closeActionGroupPopover();
+    postToHost({ type: 'custom_action', payload: { id: actionId } });
+  }
+
+  function closeActionGroupPopover() {
+    activeActionGroupId = null;
+    if ($actionGroupPopover) {
+      $actionGroupPopover.hidden = true;
+      $actionGroupPopover.innerHTML = '';
+    }
+  }
+
+  function renderActionGroupPopover(group) {
+    if (!$actionGroupPopover || !group) return;
+    $actionGroupPopover.innerHTML = '';
+    (group.actions || []).forEach(function(action) {
+      var button = elt('button', 'group-popover-action');
+      button.type = 'button';
+      button.appendChild(elt('span', 'group-popover-title', action.label));
+      if (action.description) {
+        button.appendChild(elt('span', 'group-popover-description', action.description));
+      }
+      button.addEventListener('click', function() { runCustomAction(action.id); });
+      $actionGroupPopover.appendChild(button);
+    });
+    var footer = elt('div', 'group-popover-footer');
+    var edit = elt('button', 'btn btn-ghost', 'Изменить');
+    edit.type = 'button';
+    edit.addEventListener('click', function() {
+      closeActionGroupPopover();
+      openGroupEditor(group.id);
+    });
+    footer.appendChild(edit);
+    $actionGroupPopover.appendChild(footer);
+    $actionGroupPopover.hidden = false;
+    activeActionGroupId = group.id;
+  }
+
+  function setRecommendationState(state, ids) {
+    if (!$recommendationsSection || !$actionRecommendations) return;
+    $actionRecommendations.innerHTML = '';
+    $recommendationsLoading.hidden = state !== 'loading';
+    if (state === 'disabled' || state === 'empty' || state === 'error') {
+      $recommendationsSection.hidden = true;
+      return;
+    }
+    (ids || []).slice(0, 5).forEach(function(id) {
+      var action = actionById(id);
+      if (!action) return;
+      var button = elt('button', 'qa-chip', action.label);
+      button.type = 'button';
+      button.title = action.description || action.action_prompt || '';
+      button.addEventListener('click', function() { runCustomAction(action.id); });
+      $actionRecommendations.appendChild(button);
+    });
+    $recommendationsSection.hidden =
+      state !== 'loading' && !$actionRecommendations.children.length;
+  }
+
+  function renderGroupButtons() {
+    if (!$actionGroups) return;
+    $actionGroups.innerHTML = '';
+    actionCatalogGroups.forEach(function(group) {
+      var button = elt('button', 'qa-chip action-group-btn', group.title);
+      button.type = 'button';
+      button.addEventListener('click', function() {
+        if (activeActionGroupId === group.id) closeActionGroupPopover();
+        else renderActionGroupPopover(group);
+      });
+      $actionGroups.appendChild(button);
+    });
+  }
+
+  function openGroupEditor(groupId) {
+    var group = groupById(groupId);
+    if (!group || !$actionGroupEditor) return;
+    editingActionGroupId = groupId;
+    $groupEditorTitle.textContent = group.title;
+    if ($btnGroupReset) $btnGroupReset.hidden = group.can_reset === false;
+    $actionGroupEditor.hidden = false;
+    renderGroupEditor();
+  }
+
+  function closeGroupEditor() {
+    if ($actionGroupEditor) $actionGroupEditor.hidden = true;
+    if ($groupImportPanel) $groupImportPanel.hidden = true;
+    editingActionGroupId = null;
+  }
+
+  function reorderGroupAction(actionId, delta) {
+    var group = groupById(editingActionGroupId);
+    if (!group) return;
+    var index = group.actions.findIndex(function(action) { return action.id === actionId; });
+    var target = index + delta;
+    if (index < 0 || target < 0 || target >= group.actions.length) return;
+    var temp = group.actions[index];
+    group.actions[index] = group.actions[target];
+    group.actions[target] = temp;
+    renderGroupEditor();
+    postToHost({
+      type: 'custom_action_reorder',
+      payload: {
+        group_id: group.id,
+        action_ids: group.actions.map(function(action) { return action.id; })
+      }
+    });
+  }
+
+  function renderGroupEditor() {
+    var group = groupById(editingActionGroupId);
+    if (!group || !$groupEditorActions) return;
+    $groupEditorActions.innerHTML = '';
+    group.actions.forEach(function(action, index) {
+      var row = elt('div', 'group-editor-row');
+      var text = elt('div');
+      text.appendChild(elt('div', 'group-editor-row-title', action.label));
+      text.appendChild(elt('div', 'group-editor-row-description', action.description || ''));
+      row.appendChild(text);
+      var controls = elt('div', 'group-editor-row-actions');
+      var up = elt('button', 'group-row-btn', '↑');
+      up.type = 'button'; up.title = 'Выше'; up.disabled = index === 0;
+      up.addEventListener('click', function() { reorderGroupAction(action.id, -1); });
+      var down = elt('button', 'group-row-btn', '↓');
+      down.type = 'button'; down.title = 'Ниже'; down.disabled = index === group.actions.length - 1;
+      down.addEventListener('click', function() { reorderGroupAction(action.id, 1); });
+      var edit = elt('button', 'group-row-btn', '✎');
+      edit.type = 'button'; edit.title = 'Изменить';
+      edit.addEventListener('click', function() { openCustomActionDialog(action); });
+      var exp = elt('button', 'group-row-btn', '⇩');
+      exp.type = 'button'; exp.title = 'Экспорт YAML';
+      exp.addEventListener('click', function() {
+        postToHost({ type: 'custom_action_export', payload: { id: action.id } });
+      });
+      var del = elt('button', 'group-row-btn danger-text', '×');
+      del.type = 'button'; del.title = 'Удалить';
+      del.addEventListener('click', function() { openDeleteConfirmation(action.id); });
+      controls.appendChild(up); controls.appendChild(down); controls.appendChild(edit);
+      controls.appendChild(exp); controls.appendChild(del);
+      row.appendChild(controls);
+      $groupEditorActions.appendChild(row);
+    });
   }
 
   // -- Public API --------------------------------------------------
@@ -907,6 +1089,66 @@
       // Context still goes to the model; it is intentionally not rendered.
     },
 
+    setActionCatalog: function(payload) {
+      payload = payload || {};
+      actionCatalogGroups = payload.groups || [];
+      recommendationsEnabled = payload.recommendations_enabled === true;
+      customActionToolCatalog = payload.tools || [];
+      customActionsById = {};
+      actionCatalogGroups.forEach(function(group) {
+        (group.actions || []).forEach(function(action) {
+          action.group_id = group.id;
+          customActionsById[action.id] = action;
+        });
+      });
+      if ($quickActions) {
+        $quickActions.innerHTML = '';
+        $quickActions.hidden = true;
+      }
+      if ($actionWorkspace) $actionWorkspace.hidden = false;
+      closeActionGroupPopover();
+      renderGroupButtons();
+      if (!recommendationsEnabled) {
+        setRecommendationState('disabled', []);
+      } else if ((payload.recommendation_ids || []).length) {
+        setRecommendationState('ready', payload.recommendation_ids);
+      }
+      if (editingActionGroupId && !$actionGroupEditor.hidden) {
+        var current = groupById(editingActionGroupId);
+        if (current) {
+          $groupEditorTitle.textContent = current.title;
+          renderGroupEditor();
+        } else {
+          closeGroupEditor();
+        }
+      }
+    },
+
+    setActionRecommendations: function(ids, loading) {
+      setRecommendationState(
+        !recommendationsEnabled
+          ? 'disabled'
+          : (loading ? 'loading' : ((ids || []).length ? 'ready' : 'empty')),
+        ids || []);
+    },
+
+    setActionRecommendationState: function(state, ids) {
+      setRecommendationState(
+        recommendationsEnabled ? (state || 'empty') : 'disabled',
+        ids || []);
+    },
+
+    showActionImportPreview: function(yaml, replacements) {
+      var items = replacements || [];
+      var message = items.length
+        ? ('Будут заменены действия:\n\n' + items.join('\n') + '\n\nПродолжить импорт?')
+        : 'Добавить действия из YAML?';
+      if (window.confirm(message)) {
+        postToHost({ type: 'custom_action_import_apply', payload: { yaml: yaml || '' } });
+        if ($groupImportPanel) $groupImportPanel.hidden = true;
+      }
+    },
+
     /**
      * Render the row of quick-action chips above the composer. Each chip
      * is { label, prompt, id?, type? }. Clicking a custom-action chip
@@ -923,6 +1165,8 @@
      */
     setQuickActions: function(chips, options) {
       if (!$quickActions) return;
+      if ($actionWorkspace) $actionWorkspace.hidden = true;
+      $quickActions.hidden = false;
       var autoSubmit = !(options && options.autoSubmit === false);
       customActionToolCatalog = options && options.customActionTools || [];
       while ($quickActions.firstChild) $quickActions.removeChild($quickActions.firstChild);
@@ -1123,6 +1367,66 @@
       }
     });
   }
+  if ($btnGroupEditorClose) $btnGroupEditorClose.addEventListener('click', closeGroupEditor);
+  if ($btnGroupAddAction) {
+    $btnGroupAddAction.addEventListener('click', function() {
+      openCustomActionDialog({ group_id: editingActionGroupId });
+    });
+  }
+  if ($btnGroupExport) {
+    $btnGroupExport.addEventListener('click', function() {
+      postToHost({ type: 'custom_action_export', payload: {} });
+    });
+  }
+  if ($btnGroupReset) {
+    $btnGroupReset.addEventListener('click', function() {
+      var group = groupById(editingActionGroupId);
+      if (!group) return;
+      if (window.confirm('Вернуть группу «' + group.title + '» к базовому набору действий?')) {
+        postToHost({
+          type: 'custom_action_reset_group',
+          payload: { group_id: group.id }
+        });
+      }
+    });
+  }
+  if ($btnGroupImport) {
+    $btnGroupImport.addEventListener('click', function() {
+      if ($groupImportPanel) $groupImportPanel.hidden = false;
+      if ($groupImportText) $groupImportText.focus();
+      if ($groupImportFile) $groupImportFile.value = '';
+    });
+  }
+  if ($groupImportFile) {
+    $groupImportFile.addEventListener('change', function() {
+      var file = $groupImportFile.files && $groupImportFile.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function() { $groupImportText.value = String(reader.result || ''); };
+      reader.readAsText(file);
+    });
+  }
+  if ($btnGroupImportFile) {
+    $btnGroupImportFile.addEventListener('click', function() {
+      if ($groupImportFile) $groupImportFile.click();
+    });
+  }
+  if ($btnGroupImportCancel) {
+    $btnGroupImportCancel.addEventListener('click', function() {
+      $groupImportPanel.hidden = true;
+      $groupImportText.value = '';
+    });
+  }
+  if ($btnGroupImportApply) {
+    $btnGroupImportApply.addEventListener('click', function() {
+      var yaml = ($groupImportText.value || '').trim();
+      if (!yaml) {
+        api.showError('Вставьте YAML или выберите файл.');
+        return;
+      }
+      postToHost({ type: 'custom_action_import_preview', payload: { yaml: yaml } });
+    });
+  }
   if ($customActionDeleteDialog) {
     $customActionDeleteDialog.addEventListener('click', function(e) {
       if (e.target === $customActionDeleteDialog) closeDeleteConfirmation();
@@ -1143,6 +1447,16 @@
       closeCustomActionDialog();
       return;
     }
+    if (e.key === 'Escape' && $actionGroupEditor && !$actionGroupEditor.hidden) {
+      e.preventDefault();
+      closeGroupEditor();
+      return;
+    }
+    if (e.key === 'Escape' && $actionGroupPopover && !$actionGroupPopover.hidden) {
+      e.preventDefault();
+      closeActionGroupPopover();
+      return;
+    }
     if (e.key === 'Escape' && $customActionDeleteDialog && !$customActionDeleteDialog.hidden) {
       e.preventDefault();
       closeDeleteConfirmation();
@@ -1160,6 +1474,11 @@
   });
 
   document.addEventListener('click', function(e) {
+    if ($actionGroupPopover && !$actionGroupPopover.hidden &&
+        !$actionGroupPopover.contains(e.target) &&
+        (!$actionGroups || !$actionGroups.contains(e.target))) {
+      closeActionGroupPopover();
+    }
     if ($customActionMenu && !$customActionMenu.hidden && !$customActionMenu.contains(e.target)) {
       closeCustomActionMenu();
     }

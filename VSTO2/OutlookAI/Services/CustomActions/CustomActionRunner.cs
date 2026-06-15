@@ -108,7 +108,42 @@ namespace OutlookAI.Services.CustomActions
                 return MissingContextMessage;
             }
 
-            if (source == "current_selection" || source == "selected_messages" || source == "related_thread")
+            if (source == "related_thread")
+            {
+                var selection = _surface.GetCurrentSelection(
+                    includeFullBodies: false,
+                    maxItems: 1);
+                var selected = selection?.Messages?.FirstOrDefault();
+                var topic = selected?.ConversationTopic;
+                if (string.IsNullOrWhiteSpace(topic)) topic = selected?.Subject;
+                if (!string.IsNullOrWhiteSpace(topic))
+                {
+                    var threadSearch = _surface.SearchMessages(new SearchMessagesArgs
+                    {
+                        Scope = "current_folder",
+                        SubjectContains = topic,
+                        MaxResults = Clamp(ctx.MaxItems, 1, 100, 20)
+                    }, ct);
+                    var threadIds = threadSearch?.Messages?
+                        .Select(message => message.Id)
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .ToArray() ?? new string[0];
+                    if (threadIds.Length > 0)
+                    {
+                        var threadDetails = _surface.ReadMessages(
+                            threadIds,
+                            includeBody: ctx.IncludeFullBodies,
+                            maxItems: threadIds.Length,
+                            ct: ct);
+                        return FormatDetails(threadDetails, ctx.IncludeAttachments);
+                    }
+                }
+                return FormatSelection(
+                    _surface.GetCurrentSelection(ctx.IncludeFullBodies, Clamp(ctx.MaxItems, 1, 100, 20)),
+                    ctx.IncludeAttachments);
+            }
+
+            if (source == "current_selection" || source == "selected_messages")
             {
                 var selection = _surface.GetCurrentSelection(
                     ctx.IncludeFullBodies,

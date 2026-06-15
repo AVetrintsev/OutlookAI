@@ -28,6 +28,7 @@ namespace OutlookAI.Tests
             Assert.Equal("", Config.VoiceModel);
             Assert.Equal(0.2, Config.Temperature);
             Assert.Equal(4096, Config.MaxTokens);
+            Assert.False(Config.RecommendationsEnabled);
             Assert.False(Config.LlmDebugLogEnabled);
             Assert.Equal("", Config.LlmDebugLogPath);
         }
@@ -96,6 +97,32 @@ namespace OutlookAI.Tests
             finally
             {
                 if (File.Exists(s)) File.Delete(s);
+            }
+        }
+
+        [Fact]
+        public void LoadConfigFromPaths_RecommendationsAreMachineControlled()
+        {
+            var g = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".xml");
+            var s = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".xml");
+            var u = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".xml");
+
+            File.WriteAllText(g, "<Config><RecommendationsEnabled>true</RecommendationsEnabled></Config>");
+            File.WriteAllText(u, "<Config><RecommendationsEnabled>false</RecommendationsEnabled></Config>");
+            try
+            {
+                Config.LoadConfigFromPaths(g, s, u);
+                Assert.True(Config.RecommendationsEnabled);
+
+                File.WriteAllText(s, "<Config><RecommendationsEnabled>false</RecommendationsEnabled></Config>");
+                Config.LoadConfigFromPaths(g, s, u);
+                Assert.False(Config.RecommendationsEnabled);
+            }
+            finally
+            {
+                if (File.Exists(g)) File.Delete(g);
+                if (File.Exists(s)) File.Delete(s);
+                if (File.Exists(u)) File.Delete(u);
             }
         }
 

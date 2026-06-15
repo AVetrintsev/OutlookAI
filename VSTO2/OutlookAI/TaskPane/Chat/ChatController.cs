@@ -4,6 +4,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.IO;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using Newtonsoft.Json.Linq;
@@ -32,9 +35,13 @@ namespace OutlookAI.TaskPane.Chat
         private readonly Func<string> _composerSystemPrompt;
         private readonly ExportBridge _exportBridge;
         private readonly CustomActionStore _customActionStore = new CustomActionStore();
+        private readonly CustomActionRecommendationService _recommendationService;
+        private readonly ConcurrentDictionary<string, string[]> _recommendationCache =
+            new ConcurrentDictionary<string, string[]>(StringComparer.Ordinal);
 
         private WebView2 _webView;
         private CancellationTokenSource _activeCts;
+        private CancellationTokenSource _recommendationCts;
         private bool _isReady;
         private bool _isDisposed;
         private bool _turnInFlight;
@@ -53,6 +60,7 @@ namespace OutlookAI.TaskPane.Chat
             _toolHost = toolHost ?? throw new ArgumentNullException(nameof(toolHost));
             _surface = surface;
             _store = store ?? new ConversationStore();
+            _recommendationService = new CustomActionRecommendationService(_chat);
             if (_surface != null)
             {
                 _exportBridge = new ExportBridge(_surface, CreateExportPathPolicy(), RunScript);
@@ -170,11 +178,39 @@ namespace OutlookAI.TaskPane.Chat
                         break;
                     case "custom_action_create":
                         SaveCustomAction(payload);
-                        PushCustomActionChips();
+                        _recommendationCache.Clear();
+                        PushActionCatalog();
+                        _ = RefreshRecommendationsAsync();
                         break;
                     case "custom_action_delete":
                         DeleteCustomAction((string)payload?["id"] ?? "");
-                        PushCustomActionChips();
+                        _recommendationCache.Clear();
+                        PushActionCatalog();
+                        _ = RefreshRecommendationsAsync();
+                        break;
+                    case "custom_action_reorder":
+                        ReorderCustomActions(payload);
+                        _recommendationCache.Clear();
+                        PushActionCatalog();
+                        _ = RefreshRecommendationsAsync();
+                        break;
+                    case "custom_action_reset_group":
+                        _customActionStore.ResetGroup((string)payload?["group_id"] ?? "");
+                        _recommendationCache.Clear();
+                        PushActionCatalog();
+                        _ = RefreshRecommendationsAsync();
+                        break;
+                    case "custom_action_import_preview":
+                        PreviewCustomActionImport((string)payload?["yaml"] ?? "");
+                        break;
+                    case "custom_action_import_apply":
+                        ApplyCustomActionImport((string)payload?["yaml"] ?? "");
+                        _recommendationCache.Clear();
+                        PushActionCatalog();
+                        _ = RefreshRecommendationsAsync();
+                        break;
+                    case "custom_action_export":
+                        _ = ExportCustomActionsAsync((string)payload?["id"]);
                         break;
                     case "stop":
                         try { _activeCts?.Cancel(); } catch { }
@@ -208,7 +244,8 @@ namespace OutlookAI.TaskPane.Chat
             PushTheme();
             PushReasoningOptions();
             PushContextStripFromSurface();
-            PushCustomActionChips();
+            PushActionCatalog();
+            _ = RefreshRecommendationsAsync();
             TraceLog.Write("OnWebViewReady completed", "ChatController");
         }
 
@@ -218,42 +255,109 @@ namespace OutlookAI.TaskPane.Chat
                 JsString(OfficeThemeDetector.GetThemeName()) + ");");
         }
 
-        private void PushCustomActionChips()
+        private void PushActionCatalog(string[] recommendationIds = null)
         {
             try
             {
-                var chipsArr = new JArray();
-                foreach (var custom in _customActionStore.Load())
-                {
-                    chipsArr.Add(new JObject(
-                        new JProperty("id", custom.Id),
-                        new JProperty("type", "custom_action"),
-                        new JProperty("label", custom.Title),
-                        new JProperty("prompt", custom.Description ?? custom.Prompt ?? ""),
-                        new JProperty("description", custom.Description ?? ""),
-                        new JProperty("action_prompt", custom.Prompt ?? ""),
-                        new JProperty("source", custom.Context?.Source ?? "current_selection"),
-                        new JProperty("read_filter", custom.Context?.ReadFilter ?? "all"),
-                        new JProperty("time_range", custom.Context?.TimeRange ?? "today"),
-                        new JProperty("manual_from", custom.Context?.ManualFrom?.ToString("o")),
-                        new JProperty("manual_to", custom.Context?.ManualTo?.ToString("o")),
-                        new JProperty("max_items", custom.Context?.MaxItems ?? 20),
-                        new JProperty("include_full_bodies", custom.Context?.IncludeFullBodies ?? true),
-                        new JProperty("include_attachments", custom.Context?.IncludeAttachments ?? false),
-                        new JProperty("output", custom.Output ?? "chat"),
-                        new JProperty("allowed_tools", new JArray(custom.AllowedTools ?? new string[0]))));
-                }
-                var options = new JObject(
-                    new JProperty("allowCustomActionManagement", true),
-                    new JProperty("customActionTools", ToolManifestCatalog.Default.BuildUiToolsArray()));
-                _ = RunScript("outlookai.setQuickActions(" +
-                    chipsArr.ToString(Newtonsoft.Json.Formatting.None) +
-                    ", " + options.ToString(Newtonsoft.Json.Formatting.None) + ");");
+                var payload = CustomActionUiSerializer.Build(
+                    _customActionStore.LoadCatalog(),
+                    recommendationIds,
+                    ToolManifestCatalog.Default.BuildUiToolsArray());
+                _ = RunScript("outlookai.setActionCatalog(" +
+                    payload.ToString(Newtonsoft.Json.Formatting.None) + ");");
             }
             catch (Exception ex)
             {
-                TraceLog.Write("PushCustomActionChips error: " + ex.Message, "ChatController");
+                TraceLog.Write("PushActionCatalog error: " + ex.Message, "ChatController");
             }
+        }
+
+        private async Task RefreshRecommendationsAsync()
+        {
+            if (!_isReady) return;
+            if (!Config.RecommendationsEnabled)
+            {
+                try { _recommendationCts?.Cancel(); } catch { }
+                await PushRecommendationStateAsync("disabled");
+                return;
+            }
+            if (_surface == null) return;
+            CurrentSelectionResult selection;
+            try
+            {
+                selection = _surface.GetCurrentSelection(includeFullBodies: true, maxItems: 3);
+                if (selection?.Messages == null || selection.Messages.Count == 0)
+                {
+                    var compose = _surface.GetCurrentComposeState(includeFullBody: true);
+                    if (compose != null
+                        && (!string.IsNullOrWhiteSpace(compose.Subject)
+                            || !string.IsNullOrWhiteSpace(compose.BodyPlaintext)))
+                    {
+                        selection = new CurrentSelectionResult
+                        {
+                            Count = 1,
+                            Messages = new[]
+                            {
+                                new MessageDetail
+                                {
+                                    Id = "compose|" + (compose.Subject ?? "") + "|" +
+                                         (compose.SenderEmail ?? "") + "|" +
+                                         (compose.BodyPlaintext ?? "").GetHashCode(),
+                                    Subject = compose.Subject,
+                                    From = compose.SenderEmail ?? compose.SenderName,
+                                    To = compose.ToRecipients,
+                                    Cc = compose.CcRecipients,
+                                    BodyPlaintext = compose.BodyPlaintext,
+                                    ConversationTopic = compose.InReplyTo?.ThreadTopic
+                                }
+                            }
+                        };
+                    }
+                }
+            }
+            catch { return; }
+            var key = CustomActionRecommendationService.CacheKey(selection);
+            if (string.IsNullOrEmpty(key))
+            {
+                await PushRecommendationStateAsync("empty");
+                return;
+            }
+            if (_recommendationCache.TryGetValue(key, out var cached))
+            {
+                await PushRecommendationStateAsync("ready", cached);
+                return;
+            }
+
+            try { _recommendationCts?.Cancel(); } catch { }
+            _recommendationCts?.Dispose();
+            _recommendationCts = new CancellationTokenSource();
+            var token = _recommendationCts.Token;
+            await PushRecommendationStateAsync("loading");
+            try
+            {
+                var groups = _customActionStore.LoadCatalog().Groups;
+                var ids = await _recommendationService.RecommendAsync(selection, groups, token)
+                    .ConfigureAwait(false);
+                if (token.IsCancellationRequested) return;
+                _recommendationCache[key] = ids;
+                await PushRecommendationStateAsync(ids.Length > 0 ? "ready" : "empty", ids);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                TraceLog.Write("Recommendation error: " + ex.Message, "ChatController");
+                if (!token.IsCancellationRequested)
+                {
+                    await PushRecommendationStateAsync("error");
+                }
+            }
+        }
+
+        private Task PushRecommendationStateAsync(string state, string[] ids = null)
+        {
+            return RunScript("outlookai.setActionRecommendationState(" +
+                JsString(state) + ", " +
+                new JArray(ids ?? new string[0]).ToString(Newtonsoft.Json.Formatting.None) + ");");
         }
 
         /// <summary>
@@ -548,12 +652,70 @@ namespace OutlookAI.TaskPane.Chat
                     AllowedTools = allowedTools
                 };
 
-                _customActionStore.Upsert(action);
+                _customActionStore.Upsert((string)payload["group_id"], action);
             }
             catch (Exception ex)
             {
                 TraceLog.Write("SaveCustomAction error: " + ex, "ChatController");
                 _ = RunScript("outlookai.showError(" + JsString("Не удалось сохранить действие: " + ex.Message) + ");");
+            }
+        }
+
+        private void ReorderCustomActions(JObject payload)
+        {
+            var ids = (payload?["action_ids"] as JArray)?.Values<string>().ToArray()
+                ?? new string[0];
+            _customActionStore.Reorder((string)payload?["group_id"] ?? "", ids);
+        }
+
+        private void PreviewCustomActionImport(string yaml)
+        {
+            try
+            {
+                var preview = CustomActionYamlCodec.Preview(yaml, _customActionStore.LoadCatalog());
+                _ = RunScript("outlookai.showActionImportPreview(" +
+                    JsString(yaml) + ", " +
+                    new JArray(preview.Replacements).ToString(Newtonsoft.Json.Formatting.None) + ");");
+            }
+            catch (Exception ex)
+            {
+                _ = RunScript("outlookai.showError(" + JsString("Ошибка YAML: " + ex.Message) + ");");
+            }
+        }
+
+        private void ApplyCustomActionImport(string yaml)
+        {
+            var preview = CustomActionYamlCodec.Preview(yaml, _customActionStore.LoadCatalog());
+            _customActionStore.SaveCatalog(CustomActionYamlCodec.Merge(
+                _customActionStore.LoadCatalog(),
+                preview.Imported));
+        }
+
+        private async Task ExportCustomActionsAsync(string actionId)
+        {
+            var yaml = CustomActionYamlCodec.Export(_customActionStore.LoadCatalog(), actionId);
+            Action showDialog = () =>
+            {
+                using (var dialog = new SaveFileDialog
+                {
+                    Filter = "YAML (*.yaml)|*.yaml|All files (*.*)|*.*",
+                    FileName = string.IsNullOrWhiteSpace(actionId) ? "outlookai-actions.yaml" : actionId + ".yaml"
+                })
+                {
+                    if (dialog.ShowDialog() == DialogResult.OK)
+                    {
+                        File.WriteAllText(dialog.FileName, yaml, System.Text.Encoding.UTF8);
+                    }
+                }
+            };
+            var marshaller = Globals.ThisAddIn?.OutlookMarshaller;
+            if (marshaller != null && Thread.CurrentThread.ManagedThreadId != marshaller.UiThreadId)
+            {
+                await marshaller.RunAsync(showDialog, CancellationToken.None).ConfigureAwait(false);
+            }
+            else
+            {
+                showDialog();
             }
         }
 
@@ -632,6 +794,8 @@ namespace OutlookAI.TaskPane.Chat
             if (_isDisposed) return;
             _isDisposed = true;
             try { _activeCts?.Cancel(); } catch { }
+            try { _recommendationCts?.Cancel(); } catch { }
+            try { _recommendationCts?.Dispose(); } catch { }
             try { _webView?.Dispose(); } catch { }
         }
 

@@ -79,6 +79,20 @@ function Add-OptionalInstallArgument {
     $Arguments.Add($text)
 }
 
+function Add-BooleanInstallArgument {
+    param(
+        [System.Collections.Generic.List[string]]$Arguments,
+        [string]$Name,
+        [object]$Value
+    )
+
+    $enabled = $false
+    if ($null -ne $Value) {
+        $enabled = [System.Convert]::ToBoolean($Value)
+    }
+    $Arguments.Add(("{0}:`${1}" -f $Name, $enabled.ToString().ToLowerInvariant()))
+}
+
 function Write-ProcessOutput {
     param([string[]]$Paths)
 
@@ -145,11 +159,13 @@ try {
     Add-RequiredInstallArgument -Arguments $installArgs -Name "-Temperature" -Value $config.Temperature
     Add-RequiredInstallArgument -Arguments $installArgs -Name "-MaxTokens" -Value $config.MaxTokens
     Add-RequiredInstallArgument -Arguments $installArgs -Name "-MaxBulkExportRows" -Value $config.MaxBulkExportRows
+    Add-BooleanInstallArgument -Arguments $installArgs -Name "-RecommendationsEnabled" -Value $config.RecommendationsEnabled
 
     Write-LogLine "Installer parameters:" ([ConsoleColor]::Cyan)
     Write-LogLine ("  LiteLLM base URL : " + $config.LiteLlmBaseUrl)
     Write-LogLine ("  LiteLLM model    : " + $config.LiteLlmModel)
     Write-LogLine ("  LiteLLM voice    : " + $config.LiteLlmVoiceModel)
+    Write-LogLine ("  AI recommendations: " + [System.Convert]::ToBoolean($config.RecommendationsEnabled))
     Write-LogLine ""
 
     $stdoutPath = Join-Path $env:TEMP ("OutlookAI-Installer-" + [Guid]::NewGuid().ToString("N") + ".stdout.log")

@@ -21,6 +21,20 @@
     </div>
     <div id="messages" class="messages" role="log" aria-live="polite"></div>
     <div class="bottom-zone">
+      <div id="actionWorkspace" class="action-workspace" hidden>
+        <section class="action-section">
+          <div class="action-section-title">Все действия</div>
+          <div id="actionGroups" class="action-button-row"></div>
+        </section>
+        <section id="recommendationsSection" class="action-section" hidden>
+          <div class="action-section-title">Рекомендации ИИ</div>
+          <div id="recommendationsLoading" class="recommendations-loading" hidden aria-label="Подбираются рекомендации">
+            <span></span><span></span><span></span>
+          </div>
+          <div id="actionRecommendations" class="action-button-row"></div>
+        </section>
+        <div id="actionGroupPopover" class="action-group-popover" hidden></div>
+      </div>
       <div id="quickActions" class="quick-actions"></div>
       <div id="composerResizer"
            class="composer-resizer"
@@ -44,6 +58,29 @@
         </div>
       </div>
       <div class="disclaimer">AI-помощник может ошибаться. Проверяйте важную информацию.</div>
+    </div>
+    <div id="actionGroupEditor" class="group-editor" hidden>
+      <div class="group-editor-header">
+        <button id="btnGroupEditorClose" class="icon-btn" type="button" title="Назад" aria-label="Назад">‹</button>
+        <div id="groupEditorTitle" class="custom-action-title"></div>
+        <button id="btnGroupAddAction" class="icon-btn" type="button" title="Добавить действие" aria-label="Добавить действие">＋</button>
+      </div>
+      <div class="group-editor-toolbar">
+        <button id="btnGroupImport" class="btn btn-ghost" type="button">Импорт YAML</button>
+        <button id="btnGroupExport" class="btn btn-ghost" type="button">Экспорт всех</button>
+        <button id="btnGroupReset" class="btn btn-ghost danger-text" type="button">Сбросить группу</button>
+        <input id="groupImportFile" type="file" accept=".yaml,.yml,text/yaml,text/plain" hidden>
+      </div>
+      <div id="groupImportPanel" class="group-import-panel" hidden>
+        <label class="field-label" for="groupImportText">YAML</label>
+        <textarea id="groupImportText" class="field-input field-textarea" rows="9"></textarea>
+        <div class="group-import-actions">
+          <button id="btnGroupImportFile" class="btn btn-ghost" type="button">Выбрать файл</button>
+          <button id="btnGroupImportCancel" class="btn btn-ghost" type="button">Отмена</button>
+          <button id="btnGroupImportApply" class="btn btn-primary" type="button">Импортировать</button>
+        </div>
+      </div>
+      <div id="groupEditorActions" class="group-editor-actions"></div>
     </div>
     <div id="customActionDialog" class="custom-action-dialog" hidden>
       <div class="custom-action-panel" role="dialog" aria-modal="true" aria-labelledby="customActionTitle">

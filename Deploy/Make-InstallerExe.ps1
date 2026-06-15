@@ -41,6 +41,9 @@
 .PARAMETER MaxBulkExportRows
     Default row cap for bulk exports.
 
+.PARAMETER RecommendationsEnabled
+    Enables per-message AI action recommendations. Disabled by default.
+
 .PARAMETER CertThumbprint
     Optional manifest signing certificate thumbprint forwarded to
     Make-ReleaseZip.ps1.
@@ -67,6 +70,7 @@ param(
     [double]$Temperature = 0.2,
     [int]$MaxTokens = 4096,
     [int]$MaxBulkExportRows = 2000,
+    [bool]$RecommendationsEnabled = $false,
     [string]$CertThumbprint = "",
     [switch]$KeepIntermediate,
     [switch]$ExeOnly
@@ -228,6 +232,7 @@ try {
         Temperature = $Temperature
         MaxTokens = $MaxTokens
         MaxBulkExportRows = $MaxBulkExportRows
+        RecommendationsEnabled = $RecommendationsEnabled
     })
 
     $sedPath = Join-Path $packageRoot "OutlookAI-Installer.sed"

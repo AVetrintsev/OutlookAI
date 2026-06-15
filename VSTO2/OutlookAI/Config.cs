@@ -27,6 +27,7 @@ namespace OutlookAI
         public const int DefaultMaxTokens = 4096;
         public const bool DefaultWriteToolsEnabled = true;
         public const int DefaultMaxBulkExportRows = 2000;
+        public const bool DefaultRecommendationsEnabled = false;
         public const bool DefaultLlmDebugLogEnabled = false;
         public const string DefaultLlmDebugLogPath = "";
 
@@ -44,6 +45,7 @@ namespace OutlookAI
         public static int MaxTokens { get; set; } = DefaultMaxTokens;
         public static bool WriteToolsEnabled { get; set; } = DefaultWriteToolsEnabled;
         public static int MaxBulkExportRows { get; set; } = DefaultMaxBulkExportRows;
+        public static bool RecommendationsEnabled { get; set; } = DefaultRecommendationsEnabled;
         public static bool LlmDebugLogEnabled { get; set; } = DefaultLlmDebugLogEnabled;
         public static string LlmDebugLogPath { get; set; } = DefaultLlmDebugLogPath;
 
@@ -183,6 +185,7 @@ namespace OutlookAI
             MaxTokens = DefaultMaxTokens;
             WriteToolsEnabled = DefaultWriteToolsEnabled;
             MaxBulkExportRows = DefaultMaxBulkExportRows;
+            RecommendationsEnabled = DefaultRecommendationsEnabled;
             LlmDebugLogEnabled = DefaultLlmDebugLogEnabled;
             LlmDebugLogPath = DefaultLlmDebugLogPath;
             EnabledWriteTools = new HashSet<string>(AllWriteTools, StringComparer.Ordinal);
@@ -306,6 +309,13 @@ namespace OutlookAI
                     if (mber > MaxBulkExportRowsCeiling) mber = MaxBulkExportRowsCeiling;
                     MaxBulkExportRows = mber;
                 }
+
+                var recommendationsEnabled = root.Element("RecommendationsEnabled");
+                if (recommendationsEnabled != null
+                    && bool.TryParse(recommendationsEnabled.Value, out var recommendations))
+                {
+                    RecommendationsEnabled = recommendations;
+                }
             }
             catch
             {
@@ -336,6 +346,7 @@ namespace OutlookAI
                     + "; Model=" + Model
                     + "; VoiceModel=" + (string.IsNullOrWhiteSpace(VoiceModel) ? "<disabled>" : VoiceModel)
                     + "; ApiKeyConfigured=" + (!string.IsNullOrWhiteSpace(LiteLlmApiKey))
+                    + "; RecommendationsEnabled=" + RecommendationsEnabled
                     + "; LlmDebugLogEnabled=" + LlmDebugLogEnabled
                     + "; LlmDebugLogPath=" + (string.IsNullOrWhiteSpace(LlmDebugLogPath) ? "<none>" : LlmDebugLogPath),
                     "Config");

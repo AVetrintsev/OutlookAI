@@ -8,6 +8,9 @@ namespace OutlookAI.Services.CustomActions
 {
     public sealed class CustomActionStore
     {
+        public const int CurrentSchemaVersion = 2;
+        private const string PersonalGroupId = "my_actions";
+
         public string Path { get; }
 
         public CustomActionStore()
@@ -20,61 +23,190 @@ namespace OutlookAI.Services.CustomActions
             Path = path ?? throw new ArgumentNullException(nameof(path));
         }
 
-        public IReadOnlyList<CustomActionDefinition> Load()
+        public CustomActionFile LoadCatalog()
         {
             EnsureFileExists();
             var file = JsonConvert.DeserializeObject<CustomActionFile>(File.ReadAllText(Path))
                 ?? new CustomActionFile();
-            return (file.Actions ?? new CustomActionDefinition[0])
+            var changed = false;
+            if ((file.Groups == null || file.Groups.Length == 0) && file.Actions != null)
+            {
+                file = MigrateV1(file.Actions);
+                changed = true;
+            }
+
+            file.SchemaVersion = CurrentSchemaVersion;
+            var groups = (file.Groups ?? new CustomActionGroup[0])
                 .Where(IsValid)
+                .OrderBy(group => group.Order)
+                .Select(group => group.Clone())
+                .ToList();
+            foreach (var baseline in ActionCatalog.Default.AssistantGroups())
+            {
+                if (groups.Any(group =>
+                    string.Equals(group.Id, baseline.Id, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                baseline.Order = groups.Count;
+                groups.Add(baseline);
+                changed = true;
+            }
+
+            file.Groups = groups
+                .OrderBy(group => group.Order)
+                .Select((group, index) =>
+                {
+                    group.Order = index;
+                    return group;
+                })
+                .ToArray();
+            if (changed)
+            {
+                SaveCatalog(file);
+            }
+            return file;
+        }
+
+        public IReadOnlyList<CustomActionDefinition> Load()
+        {
+            return LoadCatalog().Groups
+                .SelectMany(group => group.Actions ?? new CustomActionDefinition[0])
+                .Where(action => !action.Disabled)
                 .ToList();
         }
 
-        public void Save(IEnumerable<CustomActionDefinition> actions)
+        public void SaveCatalog(CustomActionFile file)
         {
-            var file = new CustomActionFile
+            if (file == null) throw new ArgumentNullException(nameof(file));
+            var normalized = new CustomActionFile
             {
-                Actions = (actions ?? Enumerable.Empty<CustomActionDefinition>())
+                SchemaVersion = CurrentSchemaVersion,
+                Groups = (file.Groups ?? new CustomActionGroup[0])
                     .Where(IsValid)
+                    .OrderBy(group => group.Order)
+                    .Select((group, index) =>
+                    {
+                        var copy = group.Clone();
+                        copy.Order = index;
+                        copy.Actions = copy.Actions.Where(IsValid).ToArray();
+                        return copy;
+                    })
                     .ToArray()
             };
-            File.WriteAllText(Path, JsonConvert.SerializeObject(file, Formatting.Indented));
+            var dir = System.IO.Path.GetDirectoryName(Path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(Path, JsonConvert.SerializeObject(
+                normalized,
+                Formatting.Indented,
+                new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }));
+        }
+
+        public void Upsert(string groupId, CustomActionDefinition action)
+        {
+            if (!IsValid(action))
+            {
+                throw new ArgumentException("Action id, title, prompt and context are required.", nameof(action));
+            }
+
+            var file = LoadCatalog();
+            var groups = file.Groups.ToList();
+            var currentGroup = groups.FirstOrDefault(group =>
+                group.Actions.Any(item => string.Equals(item.Id, action.Id, StringComparison.OrdinalIgnoreCase)));
+            var target = groups.FirstOrDefault(group =>
+                string.Equals(group.Id, groupId, StringComparison.OrdinalIgnoreCase));
+            if (target == null)
+            {
+                target = groups.FirstOrDefault(group =>
+                    string.Equals(group.Id, PersonalGroupId, StringComparison.OrdinalIgnoreCase));
+            }
+            if (target == null)
+            {
+                target = new CustomActionGroup
+                {
+                    Id = PersonalGroupId,
+                    Title = "Мои действия",
+                    Order = groups.Count,
+                    Actions = new CustomActionDefinition[0]
+                };
+                groups.Add(target);
+            }
+
+            if (currentGroup != null && currentGroup != target)
+            {
+                currentGroup.Actions = currentGroup.Actions
+                    .Where(item => !string.Equals(item.Id, action.Id, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+            }
+            var actions = target.Actions.ToList();
+            var index = actions.FindIndex(item =>
+                string.Equals(item.Id, action.Id, StringComparison.OrdinalIgnoreCase));
+            if (index >= 0) actions[index] = action;
+            else actions.Add(action);
+            target.Actions = actions.ToArray();
+            file.Groups = groups.ToArray();
+            SaveCatalog(file);
         }
 
         public void Upsert(CustomActionDefinition action)
         {
-            if (!IsValid(action))
-            {
-                throw new ArgumentException("Custom action id, title, prompt and context are required.", nameof(action));
-            }
-
-            var actions = Load().ToList();
-            var idx = actions.FindIndex(a => string.Equals(a.Id, action.Id, StringComparison.OrdinalIgnoreCase));
-            if (idx >= 0)
-            {
-                actions[idx] = action;
-            }
-            else
-            {
-                actions.Add(action);
-            }
-            Save(actions);
+            Upsert(PersonalGroupId, action);
         }
 
         public bool Delete(string id)
         {
-            if (string.IsNullOrWhiteSpace(id))
+            if (string.IsNullOrWhiteSpace(id)) return false;
+            var file = LoadCatalog();
+            var removed = false;
+            foreach (var group in file.Groups)
             {
-                return false;
+                var remaining = group.Actions
+                    .Where(action => !string.Equals(action.Id, id, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                removed |= remaining.Length != group.Actions.Length;
+                group.Actions = remaining;
             }
+            if (removed) SaveCatalog(file);
+            return removed;
+        }
 
-            var actions = Load().ToList();
-            var removed = actions.RemoveAll(a => string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase));
-            if (removed > 0)
+        public bool Reorder(string groupId, IReadOnlyList<string> actionIds)
+        {
+            var file = LoadCatalog();
+            var group = file.Groups.FirstOrDefault(item =>
+                string.Equals(item.Id, groupId, StringComparison.OrdinalIgnoreCase));
+            if (group == null) return false;
+            var lookup = group.Actions.ToDictionary(item => item.Id, StringComparer.OrdinalIgnoreCase);
+            var ordered = new List<CustomActionDefinition>();
+            foreach (var id in actionIds ?? new string[0])
             {
-                Save(actions);
+                if (lookup.TryGetValue(id, out var action))
+                {
+                    ordered.Add(action);
+                    lookup.Remove(id);
+                }
             }
-            return removed > 0;
+            ordered.AddRange(group.Actions.Where(action => lookup.ContainsKey(action.Id)));
+            group.Actions = ordered.ToArray();
+            SaveCatalog(file);
+            return true;
+        }
+
+        public bool ResetGroup(string groupId)
+        {
+            var baseline = ActionCatalog.Default.AssistantGroups()
+                .FirstOrDefault(group => string.Equals(group.Id, groupId, StringComparison.OrdinalIgnoreCase));
+            if (baseline == null) return false;
+            var file = LoadCatalog();
+            var groups = file.Groups.ToList();
+            var index = groups.FindIndex(group =>
+                string.Equals(group.Id, groupId, StringComparison.OrdinalIgnoreCase));
+            if (index >= 0) groups[index] = baseline;
+            else groups.Add(baseline);
+            file.Groups = groups.ToArray();
+            SaveCatalog(file);
+            return true;
         }
 
         public static string MakeActionId(string title)
@@ -83,10 +215,7 @@ namespace OutlookAI.Services.CustomActions
                 .Select(ch => char.IsLetterOrDigit(ch) ? ch : '_')
                 .ToArray();
             var id = new string(chars).Trim('_');
-            while (id.Contains("__"))
-            {
-                id = id.Replace("__", "_");
-            }
+            while (id.Contains("__")) id = id.Replace("__", "_");
             return string.IsNullOrWhiteSpace(id)
                 ? "custom_action_" + DateTime.UtcNow.ToString("yyyyMMddHHmmss")
                 : id;
@@ -94,35 +223,44 @@ namespace OutlookAI.Services.CustomActions
 
         private void EnsureFileExists()
         {
-            var dir = System.IO.Path.GetDirectoryName(Path);
-            if (!string.IsNullOrEmpty(dir))
+            if (File.Exists(Path)) return;
+            SaveCatalog(new CustomActionFile
             {
-                Directory.CreateDirectory(dir);
-            }
-            if (!File.Exists(Path))
+                SchemaVersion = CurrentSchemaVersion,
+                Groups = ActionCatalog.Default.AssistantGroups().ToArray()
+            });
+        }
+
+        private static CustomActionFile MigrateV1(IEnumerable<CustomActionDefinition> actions)
+        {
+            var groups = ActionCatalog.Default.AssistantGroups().Select(group => group.Clone()).ToList();
+            var migrated = (actions ?? Enumerable.Empty<CustomActionDefinition>())
+                .Where(IsValid)
+                .Select(action => action.Clone())
+                .ToArray();
+            if (migrated.Length > 0)
             {
-                Save(new[]
+                groups.Add(new CustomActionGroup
                 {
-                    new CustomActionDefinition
-                    {
-                        Id = "summarize_current_thread",
-                        Title = "Сводка переписки",
-                        Prompt = "Сделай краткую сводку переписки. Выдели суть, что требуется от меня, сроки и риски.",
-                        Context = new CustomActionContext
-                        {
-                            Source = "current_selection",
-                            MessageScope = "thread",
-                            FolderScope = "current_folder",
-                            ReadFilter = "all",
-                            TimeRange = "today",
-                            IncludeFullBodies = true,
-                            MaxItems = 20
-                        },
-                        Output = "chat",
-                        AllowTools = false
-                    }
+                    Id = PersonalGroupId,
+                    Title = "Мои действия",
+                    Order = groups.Count,
+                    Actions = migrated
                 });
             }
+            return new CustomActionFile
+            {
+                SchemaVersion = CurrentSchemaVersion,
+                Groups = groups.ToArray()
+            };
+        }
+
+        private static bool IsValid(CustomActionGroup group)
+        {
+            return group != null
+                && !string.IsNullOrWhiteSpace(group.Id)
+                && !string.IsNullOrWhiteSpace(group.Title)
+                && group.Actions != null;
         }
 
         private static bool IsValid(CustomActionDefinition action)

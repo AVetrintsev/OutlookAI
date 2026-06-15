@@ -15,6 +15,9 @@ using OutlookAI.Services.Tools;
 using OutlookAI.TaskPane.Chat;
 using Outlook = Microsoft.Office.Interop.Outlook;
 using System.Linq;
+using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.IO;
 
 namespace OutlookAI.TaskPane.InboxCopilot
 {
@@ -34,9 +37,13 @@ namespace OutlookAI.TaskPane.InboxCopilot
         private readonly Outlook.Explorer _explorer;
         private readonly ExportBridge _exportBridge;
         private readonly CustomActionStore _customActionStore = new CustomActionStore();
+        private readonly CustomActionRecommendationService _recommendationService;
+        private readonly ConcurrentDictionary<string, string[]> _recommendationCache =
+            new ConcurrentDictionary<string, string[]>(StringComparer.Ordinal);
 
         private WebView2 _webView;
         private CancellationTokenSource _activeCts;
+        private CancellationTokenSource _recommendationCts;
         private bool _isReady;
         private bool _isDisposed;
         private bool _turnInFlight;
@@ -57,6 +64,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             _surface = surface;
             _store = store ?? new ConversationStore();
             _explorer = explorer;
+            _recommendationService = new CustomActionRecommendationService(_chat);
             if (_surface != null)
             {
                 _exportBridge = new ExportBridge(_surface, CreateExportPathPolicy(), RunScript);
@@ -119,13 +127,23 @@ namespace OutlookAI.TaskPane.InboxCopilot
         private void OnExplorerSelectionChange()
         {
             if (_isDisposed || !_isReady) return;
+            if (Config.RecommendationsEnabled)
+            {
+                _ = PushRecommendationStateAsync("loading");
+            }
             PushContextStripAndChips();
+            _ = RefreshRecommendationsAsync();
         }
 
         private void OnExplorerFolderSwitch()
         {
             if (_isDisposed || !_isReady) return;
+            if (Config.RecommendationsEnabled)
+            {
+                _ = PushRecommendationStateAsync("loading");
+            }
             PushContextStripAndChips();
+            _ = RefreshRecommendationsAsync();
         }
 
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -171,11 +189,39 @@ namespace OutlookAI.TaskPane.InboxCopilot
                         break;
                     case "custom_action_create":
                         SaveCustomAction(payload);
+                        _recommendationCache.Clear();
                         PushContextStripAndChips();
+                        _ = RefreshRecommendationsAsync();
                         break;
                     case "custom_action_delete":
                         DeleteCustomAction((string)payload?["id"] ?? "");
+                        _recommendationCache.Clear();
                         PushContextStripAndChips();
+                        _ = RefreshRecommendationsAsync();
+                        break;
+                    case "custom_action_reorder":
+                        ReorderCustomActions(payload);
+                        _recommendationCache.Clear();
+                        PushContextStripAndChips();
+                        _ = RefreshRecommendationsAsync();
+                        break;
+                    case "custom_action_reset_group":
+                        _customActionStore.ResetGroup((string)payload?["group_id"] ?? "");
+                        _recommendationCache.Clear();
+                        PushContextStripAndChips();
+                        _ = RefreshRecommendationsAsync();
+                        break;
+                    case "custom_action_import_preview":
+                        PreviewCustomActionImport((string)payload?["yaml"] ?? "");
+                        break;
+                    case "custom_action_import_apply":
+                        ApplyCustomActionImport((string)payload?["yaml"] ?? "");
+                        _recommendationCache.Clear();
+                        PushContextStripAndChips();
+                        _ = RefreshRecommendationsAsync();
+                        break;
+                    case "custom_action_export":
+                        _ = ExportCustomActionsAsync((string)payload?["id"]);
                         break;
                     case "stop":
                         try { _activeCts?.Cancel(); } catch { }
@@ -209,6 +255,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             PushTheme();
             PushReasoningOptions();
             PushContextStripAndChips();
+            _ = RefreshRecommendationsAsync();
             TraceLog.Write("OnWebViewReady completed", "InboxCopilot");
         }
 
@@ -273,46 +320,75 @@ namespace OutlookAI.TaskPane.InboxCopilot
                 _ = RunScript("outlookai.setContextStrip(" +
                     ctx.ToString(Newtonsoft.Json.Formatting.None) + ");");
 
-                var selectionCount = sel?.Count ?? 0;
-                var chips = QuickActionChip.ComputeChipsForSelectionCount(selectionCount);
-                var chipsArr = new JArray();
-                foreach (var c in chips)
-                {
-                    chipsArr.Add(new JObject(
-                        new JProperty("label", c.Label),
-                        new JProperty("prompt", c.Prompt)));
-                }
-                foreach (var custom in _customActionStore.Load())
-                {
-                    chipsArr.Add(new JObject(
-                        new JProperty("id", custom.Id),
-                        new JProperty("type", "custom_action"),
-                        new JProperty("label", custom.Title),
-                        new JProperty("prompt", custom.Description ?? custom.Prompt ?? ""),
-                        new JProperty("description", custom.Description ?? ""),
-                        new JProperty("action_prompt", custom.Prompt ?? ""),
-                        new JProperty("source", custom.Context?.Source ?? "current_selection"),
-                        new JProperty("read_filter", custom.Context?.ReadFilter ?? "all"),
-                        new JProperty("time_range", custom.Context?.TimeRange ?? "today"),
-                        new JProperty("manual_from", custom.Context?.ManualFrom?.ToString("o")),
-                        new JProperty("manual_to", custom.Context?.ManualTo?.ToString("o")),
-                        new JProperty("max_items", custom.Context?.MaxItems ?? 20),
-                        new JProperty("include_full_bodies", custom.Context?.IncludeFullBodies ?? true),
-                        new JProperty("include_attachments", custom.Context?.IncludeAttachments ?? false),
-                        new JProperty("output", custom.Output ?? "chat"),
-                        new JProperty("allowed_tools", new JArray(custom.AllowedTools ?? new string[0]))));
-                }
-                var options = new JObject(
-                    new JProperty("allowCustomActionManagement", true),
-                    new JProperty("customActionTools", ToolManifestCatalog.Default.BuildUiToolsArray()));
-                _ = RunScript("outlookai.setQuickActions(" +
-                    chipsArr.ToString(Newtonsoft.Json.Formatting.None) +
-                    ", " + options.ToString(Newtonsoft.Json.Formatting.None) + ");");
+                var payload = CustomActionUiSerializer.Build(
+                    _customActionStore.LoadCatalog(),
+                    null,
+                    ToolManifestCatalog.Default.BuildUiToolsArray());
+                _ = RunScript("outlookai.setActionCatalog(" +
+                    payload.ToString(Newtonsoft.Json.Formatting.None) + ");");
             }
             catch (Exception ex)
             {
                 TraceLog.Write("PushContextStripAndChips error: " + ex.Message, "InboxCopilot");
             }
+        }
+
+        private async Task RefreshRecommendationsAsync()
+        {
+            if (!Config.RecommendationsEnabled)
+            {
+                try { _recommendationCts?.Cancel(); } catch { }
+                await PushRecommendationStateAsync("disabled");
+                return;
+            }
+            CurrentSelectionResult selection;
+            try { selection = _surface?.GetCurrentSelection(includeFullBodies: true, maxItems: 3); }
+            catch { return; }
+            var key = CustomActionRecommendationService.CacheKey(selection);
+            if (string.IsNullOrEmpty(key))
+            {
+                await PushRecommendationStateAsync("empty");
+                return;
+            }
+            if (_recommendationCache.TryGetValue(key, out var cached))
+            {
+                await PushRecommendationStateAsync("ready", cached);
+                return;
+            }
+            try { _recommendationCts?.Cancel(); } catch { }
+            _recommendationCts?.Dispose();
+            _recommendationCts = new CancellationTokenSource();
+            var token = _recommendationCts.Token;
+            await PushRecommendationStateAsync("loading");
+            try
+            {
+                var ids = await _recommendationService.RecommendAsync(
+                    selection,
+                    _customActionStore.LoadCatalog().Groups,
+                    token).ConfigureAwait(false);
+                if (token.IsCancellationRequested) return;
+                var current = _surface.GetCurrentSelection(includeFullBodies: false, maxItems: 3);
+                if (!string.Equals(key, CustomActionRecommendationService.CacheKey(current), StringComparison.Ordinal))
+                    return;
+                _recommendationCache[key] = ids;
+                await PushRecommendationStateAsync(ids.Length > 0 ? "ready" : "empty", ids);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                TraceLog.Write("Recommendation error: " + ex.Message, "InboxCopilot");
+                if (!token.IsCancellationRequested)
+                {
+                    await PushRecommendationStateAsync("error");
+                }
+            }
+        }
+
+        private Task PushRecommendationStateAsync(string state, string[] ids = null)
+        {
+            return RunScript("outlookai.setActionRecommendationState(" +
+                JsString(state) + ", " +
+                new JArray(ids ?? new string[0]).ToString(Newtonsoft.Json.Formatting.None) + ");");
         }
 
         private void SaveCustomAction(JObject payload)
@@ -386,12 +462,70 @@ namespace OutlookAI.TaskPane.InboxCopilot
                     AllowedTools = allowedTools
                 };
 
-                _customActionStore.Upsert(action);
+                _customActionStore.Upsert((string)payload["group_id"], action);
             }
             catch (Exception ex)
             {
                 TraceLog.Write("SaveCustomAction error: " + ex, "InboxCopilot");
                 _ = RunScript("outlookai.showError(" + JsString("Не удалось сохранить действие: " + ex.Message) + ");");
+            }
+        }
+
+        private void ReorderCustomActions(JObject payload)
+        {
+            _customActionStore.Reorder(
+                (string)payload?["group_id"] ?? "",
+                (payload?["action_ids"] as JArray)?.Values<string>().ToArray() ?? new string[0]);
+        }
+
+        private void PreviewCustomActionImport(string yaml)
+        {
+            try
+            {
+                var preview = CustomActionYamlCodec.Preview(yaml, _customActionStore.LoadCatalog());
+                _ = RunScript("outlookai.showActionImportPreview(" +
+                    JsString(yaml) + ", " +
+                    new JArray(preview.Replacements).ToString(Newtonsoft.Json.Formatting.None) + ");");
+            }
+            catch (Exception ex)
+            {
+                _ = RunScript("outlookai.showError(" + JsString("Ошибка YAML: " + ex.Message) + ");");
+            }
+        }
+
+        private void ApplyCustomActionImport(string yaml)
+        {
+            var preview = CustomActionYamlCodec.Preview(yaml, _customActionStore.LoadCatalog());
+            _customActionStore.SaveCatalog(CustomActionYamlCodec.Merge(
+                _customActionStore.LoadCatalog(),
+                preview.Imported));
+        }
+
+        private async Task ExportCustomActionsAsync(string actionId)
+        {
+            var yaml = CustomActionYamlCodec.Export(_customActionStore.LoadCatalog(), actionId);
+            Action showDialog = () =>
+            {
+                using (var dialog = new SaveFileDialog
+                {
+                    Filter = "YAML (*.yaml)|*.yaml|All files (*.*)|*.*",
+                    FileName = string.IsNullOrWhiteSpace(actionId) ? "outlookai-actions.yaml" : actionId + ".yaml"
+                })
+                {
+                    if (dialog.ShowDialog() == DialogResult.OK)
+                    {
+                        File.WriteAllText(dialog.FileName, yaml, System.Text.Encoding.UTF8);
+                    }
+                }
+            };
+            var marshaller = Globals.ThisAddIn?.OutlookMarshaller;
+            if (marshaller != null && Thread.CurrentThread.ManagedThreadId != marshaller.UiThreadId)
+            {
+                await marshaller.RunAsync(showDialog, CancellationToken.None).ConfigureAwait(false);
+            }
+            else
+            {
+                showDialog();
             }
         }
 
@@ -609,6 +743,8 @@ namespace OutlookAI.TaskPane.InboxCopilot
             if (_isDisposed) return;
             _isDisposed = true;
             try { _activeCts?.Cancel(); } catch { }
+            try { _recommendationCts?.Cancel(); } catch { }
+            try { _recommendationCts?.Dispose(); } catch { }
             try
             {
                 if (_explorer != null)

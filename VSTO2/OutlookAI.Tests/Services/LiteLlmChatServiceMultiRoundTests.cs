@@ -88,6 +88,95 @@ namespace OutlookAI.Tests.Services
         }
 
         [Fact]
+        public async Task RunTurnAsync_TextFunctionJson_DispatchesWithoutShowingJson()
+        {
+            var fake = new FakeHttpMessageHandler();
+            fake.QueueSse(HttpStatusCode.OK,
+                "data: {\"choices\":[{\"delta\":{\"content\":\"{ \\\"function\\\": \\\"outlook_get_current_selection\\\", \\\"parameters\\\": { \\\"include_full_bodies\\\": true, \\\"max_items\\\": 10 } }\"}}]}\n\n"
+                + "data: [DONE]\n\n");
+            fake.QueueSse(HttpStatusCode.OK,
+                "data: {\"choices\":[{\"delta\":{\"content\":\"Выбранное сообщение: X\"}}]}\n\n"
+                + "data: [DONE]\n\n");
+
+            using (var credentials = new LiteLlmCredentialService())
+            using (var chatHttp = new HttpClient(fake))
+            using (var chat = new LiteLlmChatService(credentials, chatHttp))
+            {
+                var ctx = new ConversationContext { SystemInstructions = "Be brief." };
+                var sink = new CapturingChatEventSink();
+                var tools = new FakeToolHost();
+                tools.Queue("outlook_get_current_selection", "{\"items\":[{\"subject\":\"X\"}]}");
+
+                var result = await chat.RunTurnAsync(ctx, "summarize selected", tools, sink, CancellationToken.None);
+
+                Assert.Equal(StopReason.Completed, result.StopReason);
+                Assert.Equal(2, result.RoundsUsed);
+                Assert.Equal("Выбранное сообщение: X", result.FinalAssistantText);
+                Assert.Equal("Выбранное сообщение: X", sink.StreamedText.ToString());
+                Assert.Single(tools.Calls);
+                Assert.Equal("outlook_get_current_selection", tools.Calls[0].Name);
+                Assert.Equal("{\"include_full_bodies\":true,\"max_items\":10}", tools.Calls[0].ArgsJson);
+                Assert.DoesNotContain("\"function\"", result.FinalAssistantText);
+            }
+        }
+
+        [Fact]
+        public async Task RunTurnAsync_RawToolResultJson_ReturnsLocalSummaryInsteadOfJson()
+        {
+            var fake = new FakeHttpMessageHandler();
+            fake.QueueSse(HttpStatusCode.OK,
+                "data: {\"choices\":[{\"delta\":{\"content\":\"PDF\\n{ \\\"folder\\\": \\\"Входящие\\\", \\\"count\\\": 1, \\\"messages\\\": [ { \\\"subject\\\": \\\"Хранилище iCloud заполнено\\\", \\\"from\\\": \\\"iCloud <noreply@email.apple.com>\\\", \\\"received_at\\\": \\\"2026-06-08T15:39:08.000+03:00\\\", \\\"body_plaintext\\\": \\\"Хранилище iCloud заполнено. Необходимо перейти на тарифный план iCloud+ или освободить место.\\\" } ] }\"}}]}\n\n"
+                + "data: [DONE]\n\n");
+
+            using (var credentials = new LiteLlmCredentialService())
+            using (var chatHttp = new HttpClient(fake))
+            using (var chat = new LiteLlmChatService(credentials, chatHttp))
+            {
+                var result = await chat.RunTurnAsync(
+                    new ConversationContext(),
+                    "summarize selected",
+                    new FakeToolHost(),
+                    new CapturingChatEventSink(),
+                    CancellationToken.None);
+
+                Assert.Equal(StopReason.Completed, result.StopReason);
+                Assert.Contains("Сводка выбранной переписки", result.FinalAssistantText);
+                Assert.Contains("Хранилище iCloud заполнено", result.FinalAssistantText);
+                Assert.DoesNotContain("\"messages\"", result.FinalAssistantText);
+                Assert.DoesNotContain("body_plaintext", result.FinalAssistantText);
+            }
+        }
+
+        [Fact]
+        public async Task RunTurnAsync_StructuredAnswerJson_UnwrapsToPlainText()
+        {
+            var fake = new FakeHttpMessageHandler();
+            fake.QueueSse(HttpStatusCode.OK,
+                "data: {\"choices\":[{\"delta\":{\"content\":\"PDF\\n{ \\\"The thread is about an order.\\\": \\\"The thread is about an order.\\\" }\"}}]}\n\n"
+                + "data: [DONE]\n\n");
+
+            using (var credentials = new LiteLlmCredentialService())
+            using (var chatHttp = new HttpClient(fake))
+            using (var chat = new LiteLlmChatService(credentials, chatHttp))
+            {
+                var sink = new CapturingChatEventSink();
+
+                var result = await chat.RunTurnAsync(
+                    new ConversationContext(),
+                    "what is this thread about?",
+                    new FakeToolHost(),
+                    sink,
+                    CancellationToken.None);
+
+                Assert.Equal(StopReason.Completed, result.StopReason);
+                Assert.Equal("The thread is about an order.", result.FinalAssistantText);
+                Assert.Equal("The thread is about an order.", sink.StreamedText.ToString());
+                Assert.DoesNotContain("PDF", result.FinalAssistantText);
+                Assert.DoesNotContain("{", result.FinalAssistantText);
+            }
+        }
+
+        [Fact]
         public async Task RunTurnAsync_StreamedToolArguments_AreAccumulated()
         {
             var fake = new FakeHttpMessageHandler();

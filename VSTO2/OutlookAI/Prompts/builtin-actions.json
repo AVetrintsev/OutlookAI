@@ -85,5 +85,824 @@
       "label": "🏖️ Пока меня не было",
       "prompt": "Меня не было с [дата начала] по [дата окончания]. Покажи важное за этот период: срочные вопросы, прямые запросы, письма, на которые нужен ответ. Рассылки и автоматические письма поставь ниже по приоритету."
     }
+  ],
+  "schema_version": 2,
+  "groups": [
+    {
+      "id": "understand",
+      "title": "Понять",
+      "order": 0,
+      "actions": [
+        {
+          "id": "understand_01",
+          "title": "Суть письма",
+          "description": "Кратко определить, кто пишет, по какому поводу, что важно и к чему ведёт письмо.",
+          "prompt": "Проанализируй текущее письмо и цепочку переписки. Кратко объясни:\nкто пишет, по какому поводу, в чём суть, какие важные детали есть,\nк чему ведёт письмо и какое следующее действие напрашивается.\nНе пересказывай всё подряд, выдели только управленчески значимое.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "understand_02",
+          "title": "Что от меня надо",
+          "description": "Определить, требуется ли от меня ответ, решение, согласование, действие или контроль.",
+          "prompt": "Определи, что именно требуется от меня по этому письму.\nРаздели явные просьбы и скрытые ожидания. Укажи, нужно ли мне:\nответить, согласовать, принять решение, делегировать, назначить встречу,\nдать данные или просто принять к сведению. Если действие не требуется,\nтак и напиши.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "understand_03",
+          "title": "Сроки и риски",
+          "description": "Найти дедлайны, просрочки, эскалации, риски и последствия бездействия.",
+          "prompt": "Найди в письме и цепочке все сроки, дедлайны, просрочки и признаки эскалации.\nОцени риски: операционные, репутационные, финансовые, юридические,\nорганизационные. Отдельно напиши, что может произойти, если не реагировать.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "understand_04",
+          "title": "Участники и роли",
+          "description": "Понять, кто инициатор, владелец вопроса, исполнитель, согласующий и наблюдатель.",
+          "prompt": "Определи участников переписки и их роли в вопросе.\nУкажи: кто инициатор, кто владелец проблемы, кто должен выполнить работу,\nкто согласует, кто информируется, кто блокирует или влияет на решение.\nЕсли роль неочевидна, отметь это как предположение.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "understand_05",
+          "title": "Хронология",
+          "description": "Собрать последовательность событий, решений и зависших вопросов по цепочке.",
+          "prompt": "Построй краткую хронологию по цепочке писем.\nПокажи по порядку: что произошло, кто что предложил, какие решения уже были,\nкакие вопросы остались открытыми, где возникло зависание или противоречие.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        }
+      ]
+    },
+    {
+      "id": "reply",
+      "title": "Ответить",
+      "order": 1,
+      "actions": [
+        {
+          "id": "reply_01",
+          "title": "Согласовать",
+          "description": "Подготовить короткое согласование с условиями или следующим шагом.",
+          "prompt": "Подготовь черновик ответа, в котором я согласовываю запрос.\nУкажи, что согласовано, при каких условиях, какой следующий шаг,\nкто должен действовать дальше и какой ожидаемый срок, если он понятен.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "reply_02",
+          "title": "Отказать конструктивно",
+          "description": "Вежливо отказать, объяснив причину и предложив альтернативу.",
+          "prompt": "Подготовь черновик конструктивного отказа.\nТон — спокойный и деловой. Нужно объяснить причину отказа,\nне создавать конфликта и, если возможно, предложить альтернативный вариант\nили следующий допустимый шаг.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "reply_03",
+          "title": "Запросить детали",
+          "description": "Попросить недостающую информацию конкретным списком вопросов.",
+          "prompt": "Подготовь черновик письма с запросом недостающих деталей.\nСначала кратко объясни, зачем нужны уточнения.\nЗатем дай конкретный список вопросов. Не задавай общие вопросы,\nспрашивай только то, что действительно нужно для движения дальше.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "reply_04",
+          "title": "Запросить статус",
+          "description": "Аккуратно запросить текущий статус, срок и блокеры.",
+          "prompt": "Подготовь короткое письмо с запросом статуса.\nНужно уточнить: что сделано, что осталось, есть ли блокеры,\nкакой актуальный срок завершения и нужна ли помощь или решение с моей стороны.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "reply_05",
+          "title": "Напомнить о договорённостях",
+          "description": "Напомнить о ранее согласованном действии, сроке или результате.",
+          "prompt": "Подготовь письмо-напоминание по договорённостям из цепочки.\nСошлись на суть договорённости, срок и ожидаемый результат.\nТон — спокойный, но достаточно конкретный, чтобы письмо подтолкнуло к действию.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        }
+      ]
+    },
+    {
+      "id": "decide",
+      "title": "Решить",
+      "order": 2,
+      "actions": [
+        {
+          "id": "decide_01",
+          "title": "Варианты решения",
+          "description": "Дать 2–3 возможных варианта с плюсами, минусами и рисками.",
+          "prompt": "Предложи 2–3 варианта решения вопроса из письма.\nДля каждого варианта укажи плюсы, минусы, риски, последствия\nи в каких условиях этот вариант лучше выбирать.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "decide_02",
+          "title": "Рекомендация",
+          "description": "Предложить лучший вариант действия и объяснить почему.",
+          "prompt": "Дай рекомендацию, как лучше поступить по этому письму.\nОбъясни, почему этот вариант предпочтителен, какие есть риски,\nчто нужно сделать первым шагом и что стоит проконтролировать.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "decide_03",
+          "title": "Если ничего не делать",
+          "description": "Оценить последствия бездействия.",
+          "prompt": "Оцени, что произойдёт, если по этому письму ничего не делать.\nРаздели последствия на краткосрочные и долгосрочные.\nОтдельно укажи, какие риски наиболее вероятны, а какие критичны,\nдаже если вероятность ниже.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "decide_04",
+          "title": "Найти противоречия",
+          "description": "Найти конфликтующие требования, сроки, обещания или позиции участников.",
+          "prompt": "Проверь письмо и цепочку на противоречия.\nНайди расхождения в сроках, требованиях, договорённостях, позициях участников\nи формулировках. Для каждого противоречия объясни, почему оно важно.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "decide_05",
+          "title": "Проверить полноту запроса",
+          "description": "Понять, хватает ли данных для решения или запуска работы.",
+          "prompt": "Проверь, достаточно ли информации в письме, чтобы принять решение\nили запустить работу. Укажи, каких данных не хватает, какие допущения\nпридётся сделать и какие вопросы нужно задать отправителю.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        }
+      ]
+    },
+    {
+      "id": "delegate",
+      "title": "Делегировать",
+      "order": 3,
+      "actions": [
+        {
+          "id": "delegate_01",
+          "title": "Поставить задачу",
+          "description": "Превратить письмо в задачу с результатом, сроком и критериями готовности.",
+          "prompt": "Преврати это письмо в задачу для исполнителя.\nСформируй: название задачи, контекст, что нужно сделать,\nожидаемый результат, срок, ответственный, критерии готовности,\nзависимости и риски.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "delegate_02",
+          "title": "Делегировать",
+          "description": "Подготовить поручение другому человеку с контекстом и ожидаемым результатом.",
+          "prompt": "Подготовь письмо для делегирования этого вопроса.\nНужно кратко передать контекст, объяснить, что требуется,\nкакой результат ожидается, в какой срок и когда нужен статус.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "delegate_03",
+          "title": "Разложить на подзадачи",
+          "description": "Разбить запрос на последовательные шаги исполнения.",
+          "prompt": "Разложи вопрос из письма на подзадачи.\nДля каждой подзадачи укажи цель, результат, исполнителя или роль,\nзависимости, примерный срок и критерий завершения.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "delegate_04",
+          "title": "Чек-лист исполнения",
+          "description": "Сделать контрольный список, чтобы не потерять важные действия.",
+          "prompt": "Составь чек-лист исполнения по этому письму.\nЧек-лист должен быть практичным: только действия, которые можно проверить.\nОтдельно выдели обязательные пункты и желательные пункты.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "delegate_05",
+          "title": "Jira-задача",
+          "description": "Сформировать описание задачи для Jira или другого трекера.",
+          "prompt": "Сформируй задачу для Jira по этому письму.\nИспользуй структуру: summary, context, goal, description,\nacceptance criteria, dependencies, risks, questions.\nФормулировки должны быть понятны разработчику, аналитику и тестировщику.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "delegate_06",
+          "title": "Назначить владельца",
+          "description": "Определить, кто должен владеть вопросом дальше.",
+          "prompt": "Определи, кто должен быть владельцем вопроса дальше.\nЕсли владелец очевиден из переписки — укажи его.\nЕсли нет — предложи роль или подразделение, которое логично назначить владельцем.\nОбъясни кратко.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        }
+      ]
+    },
+    {
+      "id": "meetings",
+      "title": "Встречи",
+      "order": 4,
+      "actions": [
+        {
+          "id": "meetings_01",
+          "title": "Нужна ли встреча",
+          "description": "Проверить, можно ли решить вопрос без встречи.",
+          "prompt": "Оцени, нужна ли по этому письму встреча.\nЕсли вопрос можно решить письмом, задачей или коротким согласованием —\nпредложи этот путь. Если встреча нужна, объясни зачем,\nкого пригласить, на сколько минут и какой результат должен быть на выходе.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "meetings_02",
+          "title": "Создать встречу",
+          "description": "Подготовить встречу с названием, участниками, повесткой и ожидаемым результатом.",
+          "prompt": "Подготовь параметры встречи по этому письму:\nназвание, цель, участники, длительность, повестка, ожидаемый результат,\nвопросы для обсуждения и материалы, которые нужно подготовить заранее.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "meetings_03",
+          "title": "Подготовить меня к встрече",
+          "description": "Дать краткий бриф перед встречей.",
+          "prompt": "Подготовь меня к встрече по этой переписке.\nДай краткий бриф: контекст, участники, интересы сторон,\nспорные вопросы, что мне нужно решить, какие вопросы задать\nи какой позиции лучше придерживаться.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "meetings_04",
+          "title": "Вопросы на встречу",
+          "description": "Подготовить точные вопросы, чтобы встреча не ушла в общие разговоры.",
+          "prompt": "Сформулируй список вопросов для встречи по этому письму.\nВопросы должны помогать принять решение, снять неопределённость,\nопределить ответственных, сроки и следующий шаг.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        }
+      ]
+    },
+    {
+      "id": "control",
+      "title": "Контроль",
+      "order": 5,
+      "actions": [
+        {
+          "id": "control_01",
+          "title": "Открытые вопросы",
+          "description": "Собрать все незакрытые вопросы из письма или цепочки.",
+          "prompt": "Собери все открытые вопросы из письма и цепочки.\nРаздели их на вопросы для решения, вопросы для уточнения,\nвопросы для исполнения и вопросы для контроля.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "control_02",
+          "title": "Кого пингануть",
+          "description": "Определить, у кого завис вопрос и кому нужно написать.",
+          "prompt": "Определи, у кого сейчас завис вопрос.\nУкажи, кому нужно написать, что именно запросить,\nкакой срок поставить и какой тон лучше использовать.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "control_03",
+          "title": "Сделать follow-up",
+          "description": "Написать напоминание или уточнение по зависшему вопросу.",
+          "prompt": "Подготовь follow-up письмо по этому вопросу.\nНужно напомнить о контексте, запросить актуальный статус,\nуточнить срок и следующий шаг. Тон — деловой, без давления,\nно достаточно конкретный.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "control_04",
+          "title": "Эскалировать",
+          "description": "Подготовить письмо для эскалации с фактами, сроками и требуемым решением.",
+          "prompt": "Подготовь письмо для эскалации.\nСтруктура: контекст, факты, что уже было сделано,\nгде возникло зависание, какие риски, какое решение требуется\nи от кого именно.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        }
+      ]
+    },
+    {
+      "id": "manager",
+      "title": "Руководителю",
+      "order": 6,
+      "actions": [
+        {
+          "id": "manager_01",
+          "title": "Управленческое резюме",
+          "description": "Показать проблему, решение, риски, владельца и следующий шаг.",
+          "prompt": "Подготовь управленческое резюме по этому письму.\nНе пересказывай переписку. Дай: суть проблемы, почему это важно,\nкакие есть риски, кто владелец, какое решение требуется,\nкакой следующий шаг.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "manager_02",
+          "title": "Что я должен решить",
+          "description": "Отделить информационный шум от реального решения руководителя.",
+          "prompt": "Определи, какое решение требуется именно от меня как от руководителя.\nЕсли решение не требуется, так и напиши. Если требуется —\nсформулируй предмет решения, варианты, риски и рекомендуемый выбор.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "manager_03",
+          "title": "Можно ли делегировать",
+          "description": "Понять, можно ли не забирать вопрос себе.",
+          "prompt": "Оцени, можно ли делегировать этот вопрос.\nЕсли да — кому или какой роли, что именно поручить,\nкакой результат запросить и как оставить контроль без погружения в операционку.\nЕсли нельзя — объясни почему.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "manager_04",
+          "title": "Позиция для руководства",
+          "description": "Подготовить короткую позицию наверх - статус, проблема, варианты, рекомендация.",
+          "prompt": "Подготовь позицию для руководства по этому вопросу.\nСтруктура: статус, проблема, риски, варианты решения,\nмоя рекомендация, что требуется от руководства.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "manager_05",
+          "title": "Ответ без операционки",
+          "description": "Вернуть вопрос владельцам процесса, не втягиваясь в ручное управление.",
+          "prompt": "Подготовь ответ, который не втягивает меня в операционное исполнение.\nНужно вернуть вопрос владельцам процесса, зафиксировать ожидания,\nсрок и результат, оставив за мной только контроль или принятие решения.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "manager_06",
+          "title": "Политический риск",
+          "description": "Оценить конфликт интересов, чувствительные места и риск неправильного тона.",
+          "prompt": "Оцени политические и организационные риски этого письма.\nУкажи, чьи интересы затронуты, где возможен конфликт,\nкакие формулировки опасны, кому лучше не писать напрямую\nи какой стиль ответа безопаснее.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        }
+      ]
+    },
+    {
+      "id": "long_thread",
+      "title": "Длинная цепочка",
+      "order": 7,
+      "actions": [
+        {
+          "id": "long_thread_01",
+          "title": "Разобрать цепочку",
+          "description": "Понять, кто что сказал, что решили, где конфликт и где зависло.",
+          "prompt": "Разбери длинную цепочку писем.\nКратко покажи: тема, участники, ключевые сообщения,\nпринятые решения, открытые вопросы, конфликтные точки,\nзависшие действия и рекомендуемый следующий шаг.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "long_thread_02",
+          "title": "Последнее важное изменение",
+          "description": "Найти, что нового появилось в последних письмах.",
+          "prompt": "Определи, что важного изменилось в последних письмах цепочки.\nНе пересказывай всю историю. Покажи только новые факты,\nновые решения, изменения позиции, новые сроки, новые риски.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "long_thread_03",
+          "title": "Карта договорённостей",
+          "description": "Собрать договорённости в структуру: что, кто, срок, статус.",
+          "prompt": "Собери карту договорённостей по цепочке.\nДля каждой договорённости укажи: что договорились,\nкто ответственный, срок, текущий статус и есть ли риск срыва.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "long_thread_04",
+          "title": "Карта разногласий",
+          "description": "Показать, кто с чем не согласен и почему.",
+          "prompt": "Собери карту разногласий по цепочке.\nУкажи участников, предмет разногласия, аргументы сторон,\nпоследствия конфликта и что нужно решить, чтобы двигаться дальше.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        },
+        {
+          "id": "long_thread_05",
+          "title": "Итоговое письмо",
+          "description": "Закрыть длинную переписку одним структурированным письмом.",
+          "prompt": "Подготовь итоговое письмо по длинной цепочке.\nСтруктура: краткий контекст, что уже решили,\nчто остаётся открытым, кто что делает, сроки,\nследующий контрольный шаг. Письмо должно закрывать хаос переписки.",
+          "context": {
+            "source": "related_thread",
+            "message_scope": "thread",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": true,
+            "include_attachments": false,
+            "max_items": 20
+          },
+          "output": "chat",
+          "allow_tools": false,
+          "allowed_tools": []
+        }
+      ]
+    }
   ]
 }

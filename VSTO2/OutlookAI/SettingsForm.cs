@@ -12,7 +12,6 @@ namespace OutlookAI
 
         private TextBox _txtApiKey;
         private Label _lblCredentialStatus;
-        private ComboBox _cmbReasoningEffort;
         private CheckedListBox _clbWriteTools;
         private Label _lblSaved;
         private CheckBox _chkLlmDebugLogEnabled;
@@ -152,36 +151,17 @@ namespace OutlookAI
                 Size = new Size(400, 155)
             };
 
-            var lblReasoning = new Label
-            {
-                Text = "Уровень рассуждений:",
-                Location = new Point(15, 28),
-                AutoSize = true,
-                Font = new Font("Segoe UI", 9F, FontStyle.Regular)
-            };
-
-            _cmbReasoningEffort = new ComboBox
-            {
-                Location = new Point(145, 25),
-                Width = 230,
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Font = new Font("Segoe UI", 9F, FontStyle.Regular)
-            };
-            _cmbReasoningEffort.Items.AddRange(Config.AvailableReasoningEfforts);
-            var effortIdx = Array.IndexOf(Config.AvailableReasoningEfforts, Config.ReasoningEffort);
-            _cmbReasoningEffort.SelectedIndex = effortIdx >= 0 ? effortIdx : 0;
-
             var lblWriteTools = new Label
             {
                 Text = "Разрешённые действия:",
-                Location = new Point(15, 60),
+                Location = new Point(15, 28),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular)
             };
 
             _clbWriteTools = new CheckedListBox
             {
-                Location = new Point(145, 58),
+                Location = new Point(145, 25),
                 Size = new Size(230, 60),
                 CheckOnClick = true,
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
@@ -197,14 +177,14 @@ namespace OutlookAI
             var btnSaveAi = new Button
             {
                 Text = "Сохранить",
-                Location = new Point(255, 123),
+                Location = new Point(255, 91),
                 Width = 120
             };
             btnSaveAi.Click += BtnSaveAiSettings_Click;
 
             _lblSaved = new Label
             {
-                Location = new Point(15, 128),
+                Location = new Point(15, 96),
                 AutoSize = true,
                 ForeColor = Color.DarkGreen,
                 Font = new Font("Segoe UI", 8F, FontStyle.Italic),
@@ -214,7 +194,6 @@ namespace OutlookAI
 
             grpAi.Controls.AddRange(new Control[]
             {
-                lblReasoning, _cmbReasoningEffort,
                 lblWriteTools, _clbWriteTools,
                 btnSaveAi, _lblSaved
             });
@@ -307,12 +286,6 @@ namespace OutlookAI
 
         private void BtnSaveAiSettings_Click(object sender, EventArgs e)
         {
-            var pickedEffort = _cmbReasoningEffort.SelectedItem as string;
-            if (!string.IsNullOrEmpty(pickedEffort))
-            {
-                Config.ReasoningEffort = pickedEffort;
-            }
-
             var newSet = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < _clbWriteTools.Items.Count; i++)
             {

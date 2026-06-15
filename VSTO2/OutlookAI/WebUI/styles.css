@@ -977,18 +977,8 @@ html, body {
 .composer-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
-}
-.reasoning-select {
-  min-width: 0;
-  max-width: calc(100% - 52px);
-  border: 0;
-  border-radius: 6px;
-  padding: 5px 7px;
-  background: var(--tool-bg);
-  color: var(--text);
-  font: 11px var(--font-stack);
 }
 .composer-actions {
   flex: 0 0 auto;

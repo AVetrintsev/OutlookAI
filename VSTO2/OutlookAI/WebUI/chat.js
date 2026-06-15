@@ -33,7 +33,6 @@
   var $btnStop = document.getElementById('btnStop');
   var $btnClear = document.getElementById('btnClear');
   var $btnCopy = document.getElementById('btnCopy');
-  var $reasoning = document.getElementById('reasoningSelect');
   var $composerResizer = document.getElementById('composerResizer');
   var $quickActions = document.getElementById('quickActions');
   var $customActionDialog = document.getElementById('customActionDialog');
@@ -983,37 +982,8 @@
       });
     },
 
-    /**
-     * Populate the reasoning-effort dropdown based on the model the host
-     * is currently configured for. C# computes the list via
-     * Config.ReasoningEffortsForModel and pushes it here. Always keeps
-     * a leading "(default)" option mapped to value="".
-     *
-     *  opts   - array of strings, e.g. ['None','Low','Medium','High','XHigh']
-     *  selected - optional. Pre-selects the matching option (case-insensitive).
-     *             Pass '' to keep the default.
-     */
-    setReasoningOptions: function(opts, selected) {
-      while ($reasoning.firstChild) $reasoning.removeChild($reasoning.firstChild);
-      var def = document.createElement('option');
-      def.value = '';
-      def.textContent = 'На основе контекста письма';
-      $reasoning.appendChild(def);
-      (opts || []).forEach(function(name) {
-        var el = document.createElement('option');
-        el.value = name;
-        el.textContent = name;
-        $reasoning.appendChild(el);
-      });
-      if (selected) {
-        for (var i = 0; i < $reasoning.options.length; i++) {
-          if ($reasoning.options[i].value.toLowerCase() === String(selected).toLowerCase()) {
-            $reasoning.selectedIndex = i;
-            break;
-          }
-        }
-      }
-    },
+    // Kept temporarily for compatibility with hosts that still push options.
+    setReasoningOptions: function() {},
 
     // Used by C# during dev to verify the bridge is live before
     // pushing real messages. Returns a string from JS that C# can
@@ -1042,8 +1012,7 @@
     postToHost({
       type: 'send',
       payload: {
-        text: text,
-        reasoning: $reasoning.value || null
+        text: text
       }
     });
   }

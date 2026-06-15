@@ -9,26 +9,19 @@
 </head>
 <body class="theme-light">
   <div id="app">
-    <header class="app-header">
-      <div class="app-identity">
-        <div class="app-mark" aria-hidden="true">✦</div>
-        <div class="app-title">AI-помощник</div>
+    <div class="app-toolbar">
+      <div class="app-toolbar-left">
+        <button id="btnClear" class="header-icon-btn new-chat-btn" type="button" title="Новый чат" aria-label="Новый чат">
+          <span class="new-chat-icon" aria-hidden="true">＋</span>
+        </button>
       </div>
-      <div class="app-header-actions">
+      <div class="app-toolbar-right">
         <button id="btnCopy" class="header-icon-btn" type="button" title="Скопировать диалог" aria-label="Скопировать диалог">⧉</button>
-        <button id="btnClear" class="header-icon-btn header-trash-btn" type="button" title="Очистить диалог" aria-label="Очистить диалог">🗑</button>
       </div>
-    </header>
-    <section class="context-section">
-      <div class="section-label">Контекст письма</div>
-      <div id="contextStrip" class="context-strip">
-        <div class="context-line context-subject" id="ctxSubject">Без темы</div>
-        <div class="context-line context-recipients" id="ctxRecipients"></div>
-        <div class="context-line context-thread" id="ctxThread"></div>
-      </div>
-    </section>
+    </div>
     <div id="messages" class="messages" role="log" aria-live="polite"></div>
     <div class="bottom-zone">
+      <div id="quickActions" class="quick-actions"></div>
       <div id="composerResizer"
            class="composer-resizer"
            role="separator"
@@ -37,7 +30,6 @@
            tabindex="0">
         <span class="composer-resizer-grip" aria-hidden="true"></span>
       </div>
-      <div id="quickActions" class="quick-actions"></div>
       <div id="composer" class="composer">
         <textarea id="composerInput"
                   class="composer-input"

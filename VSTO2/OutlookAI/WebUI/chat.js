@@ -35,9 +35,6 @@
   var $btnCopy = document.getElementById('btnCopy');
   var $reasoning = document.getElementById('reasoningSelect');
   var $composerResizer = document.getElementById('composerResizer');
-  var $ctxSubject = document.getElementById('ctxSubject');
-  var $ctxRecipients = document.getElementById('ctxRecipients');
-  var $ctxThread = document.getElementById('ctxThread');
   var $quickActions = document.getElementById('quickActions');
   var $customActionDialog = document.getElementById('customActionDialog');
   var $customActionName = document.getElementById('customActionName');
@@ -676,7 +673,6 @@
       var loading = elt('div', 'msg-loading');
       loading.setAttribute('role', 'status');
       loading.setAttribute('aria-label', 'Формируется ответ');
-      loading.appendChild(elt('span', 'msg-loading-label', 'Формирую ответ'));
       loading.appendChild(elt('span', 'msg-loading-dots', ''));
       node.appendChild(loading);
       node.addEventListener('contextmenu', function(e) {
@@ -909,32 +905,7 @@
     },
 
     setContextStrip: function(ctx) {
-      ctx = ctx || {};
-      // Phase 3a: support two shapes of context.
-      //   Inbox shape:    { folder, unread_count, total_count, selection? }
-      //   Compose shape:  { subject, recipients, thread }
-      // Disambiguate by checking for ctx.folder.
-      if (ctx.folder !== undefined) {
-        var unread = (ctx.unread_count != null) ? (' · ' + ctx.unread_count + ' непрочит.') : '';
-        $ctxSubject.textContent = 'Папка: ' + ctx.folder + unread;
-        if (ctx.selection && ctx.selection.count > 0) {
-          if (ctx.selection.count === 1) {
-            $ctxRecipients.textContent = 'Письмо: ' + (ctx.selection.subject || 'Без темы') +
-              (ctx.selection.from ? (' \u2014 ' + ctx.selection.from) : '');
-          } else {
-            $ctxRecipients.textContent = 'Выбрано писем: ' + ctx.selection.count;
-          }
-        } else {
-          $ctxRecipients.textContent = 'Выберите письмо, чтобы добавить его в контекст.';
-        }
-        $ctxThread.textContent = '';
-        return;
-      }
-      // Compose shape (Phase 2 behaviour unchanged).
-      $ctxSubject.textContent = ctx.subject ? ('Письмо: ' + ctx.subject) : 'Новое письмо';
-      var recipients = (ctx.recipients || []).join(', ');
-      $ctxRecipients.textContent = recipients ? ('Получатели: ' + recipients) : 'Получатели не указаны';
-      $ctxThread.textContent = ctx.thread || '';
+      // Context still goes to the model; it is intentionally not rendered.
     },
 
     /**

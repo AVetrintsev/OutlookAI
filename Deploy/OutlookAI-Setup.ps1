@@ -90,7 +90,9 @@ function Add-BooleanInstallArgument {
     if ($null -ne $Value) {
         $enabled = [System.Convert]::ToBoolean($Value)
     }
-    $Arguments.Add(("{0}:`${1}" -f $Name, $enabled.ToString().ToLowerInvariant()))
+    $Arguments.Add($Name)
+    $normalized = if ($enabled) { "1" } else { "0" }
+    $Arguments.Add($normalized)
 }
 
 function Write-ProcessOutput {

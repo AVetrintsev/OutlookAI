@@ -30,7 +30,7 @@ param(
     [double]$Temperature = 0.2,
     [int]$MaxTokens = 4096,
     [int]$MaxBulkExportRows = 2000,
-    [bool]$RecommendationsEnabled = $false
+    [string]$RecommendationsEnabled = "false"
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,7 +57,33 @@ function Normalize-OptionalValue {
     return $trimmed
 }
 
+function ConvertTo-BooleanFlag {
+    param(
+        [AllowEmptyString()][string]$Value,
+        [bool]$Default = $false
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $Default
+    }
+
+    switch ($Value.Trim().ToLowerInvariant()) {
+        "1" { return $true }
+        "0" { return $false }
+        "true" { return $true }
+        "false" { return $false }
+        "yes" { return $true }
+        "no" { return $false }
+        "on" { return $true }
+        "off" { return $false }
+        default {
+            throw "RecommendationsEnabled must be one of: true, false, 1, 0, yes, no, on, off."
+        }
+    }
+}
+
 $LiteLlmVoiceModel = Normalize-OptionalValue $LiteLlmVoiceModel
+$RecommendationsEnabledFlag = ConvertTo-BooleanFlag -Value $RecommendationsEnabled -Default $false
 
 # Cleans every known OutlookAI registration for one Windows user. Designed
 # to be called once per user hive (offline-loaded for non-logged-in users,
@@ -421,7 +447,7 @@ $v3Config = @"
   <Temperature>$Temperature</Temperature>
   <MaxTokens>$MaxTokens</MaxTokens>
   <MaxBulkExportRows>$MaxBulkExportRows</MaxBulkExportRows>
-  <RecommendationsEnabled>$($RecommendationsEnabled.ToString().ToLowerInvariant())</RecommendationsEnabled>
+  <RecommendationsEnabled>$($RecommendationsEnabledFlag.ToString().ToLowerInvariant())</RecommendationsEnabled>
 </Config>
 "@
 
@@ -452,7 +478,7 @@ Write-Host "  Effective server config:" -ForegroundColor Gray
 Write-Host "    Base URL : $LiteLlmBaseUrl" -ForegroundColor Gray
 Write-Host "    Model    : $LiteLlmModel" -ForegroundColor Gray
 Write-Host "    Voice    : $LiteLlmVoiceModel" -ForegroundColor Gray
-Write-Host "    AI recommendations: $RecommendationsEnabled" -ForegroundColor Gray
+Write-Host "    AI recommendations: $RecommendationsEnabledFlag" -ForegroundColor Gray
 # v2.1+ release packages ship a version.json alongside Install-OutlookAI.ps1.
 # Copy it into the install dir so the in-app updater knows what is installed.
 $stagedVersionJson = Join-Path $SourcePath "version.json"

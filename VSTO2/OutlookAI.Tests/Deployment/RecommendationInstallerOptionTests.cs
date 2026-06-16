@@ -13,10 +13,14 @@ namespace OutlookAI.Tests.Deployment
             var setup = ReadRepoFile("Deploy", "OutlookAI-Setup.ps1");
             var interactive = ReadRepoFile("Deploy", "Build-InstallerInteractive.ps1");
 
-            Assert.Contains("[bool]$RecommendationsEnabled = $false", install);
+            Assert.Contains("[string]$RecommendationsEnabled = \"false\"", install);
+            Assert.Contains("ConvertTo-BooleanFlag", install);
             Assert.Contains("<RecommendationsEnabled>", install);
             Assert.Contains("RecommendationsEnabled = $RecommendationsEnabled", builder);
-            Assert.Contains("-RecommendationsEnabled", setup);
+            Assert.Contains("Add-BooleanInstallArgument", setup);
+            Assert.Contains("$Arguments.Add($Name)", setup);
+            Assert.Contains("\"1\"", setup);
+            Assert.Contains("\"0\"", setup);
             Assert.Contains("Enable AI recommendations", interactive);
             Assert.Contains("RecommendationsEnabled = $recommendationsEnabled", interactive);
         }

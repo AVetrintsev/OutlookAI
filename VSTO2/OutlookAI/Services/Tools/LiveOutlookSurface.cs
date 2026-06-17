@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using OutlookAI.Services;
 using OutlookAI.Services.Export;
@@ -897,7 +898,10 @@ namespace OutlookAI.Services.Tools
 
                     var draft = original.ReplyAll();
                     draft.Display(false);
-                    draft.HTMLBody = PlainTextToHtml(args?.BodyPlaintext) + "<br>" + (draft.HTMLBody ?? "");
+                    draft.HTMLBody = PlainTextToHtml(args?.BodyPlaintext)
+                        + "<br>"
+                        + BuildOriginalMessageHeaderHtml(original)
+                        + (draft.HTMLBody ?? "");
                     draft.Save();
                     return CreatedFromMail(draft, "Drafts", "Черновик ответа");
                 }
@@ -925,7 +929,7 @@ namespace OutlookAI.Services.Tools
                     meeting.Display(false);
                     var body = (args?.BodyPlaintext ?? "").Trim();
                     var signature = meeting.Body ?? "";
-                    var history = original.Body ?? "";
+                    var history = BuildOriginalMessageText(original);
                     meeting.Body = JoinBodySections(body, signature, history);
                     try { meeting.Recipients.ResolveAll(); } catch (COMException) { }
                     meeting.Save();
@@ -1203,6 +1207,91 @@ namespace OutlookAI.Services.Tools
                 .Replace("\r\n", "\n")
                 .Replace("\n", "<br>");
             return "<div>" + encoded + "</div>";
+        }
+
+        private static string BuildOriginalMessageHeaderHtml(Outlook.MailItem original)
+        {
+            if (original == null) return "";
+            var sb = new StringBuilder();
+            sb.Append("<div style=\"border-top:1px solid #b5b5b5;margin-top:12px;padding-top:8px\">");
+            AppendHeaderHtml(sb, "От", FormatSender(original));
+            AppendHeaderHtml(sb, "Отправлено", FormatMailDate(GetOriginalDate(original)));
+            AppendHeaderHtml(sb, "Кому", SafeMailString(() => original.To));
+            AppendHeaderHtml(sb, "Копия", SafeMailString(() => original.CC));
+            AppendHeaderHtml(sb, "Тема", SafeMailString(() => original.Subject));
+            sb.Append("</div><br>");
+            return sb.ToString();
+        }
+
+        private static string BuildOriginalMessageText(Outlook.MailItem original)
+        {
+            if (original == null) return "";
+            var sb = new StringBuilder();
+            sb.AppendLine("----- Исходное сообщение -----");
+            AppendHeaderText(sb, "От", FormatSender(original));
+            AppendHeaderText(sb, "Отправлено", FormatMailDate(GetOriginalDate(original)));
+            AppendHeaderText(sb, "Кому", SafeMailString(() => original.To));
+            AppendHeaderText(sb, "Копия", SafeMailString(() => original.CC));
+            AppendHeaderText(sb, "Тема", SafeMailString(() => original.Subject));
+            sb.AppendLine();
+            sb.AppendLine(SafeMailString(() => original.Body));
+            return sb.ToString();
+        }
+
+        private static void AppendHeaderHtml(StringBuilder sb, string name, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return;
+            sb.Append("<div><b>")
+                .Append(WebUtility.HtmlEncode(name))
+                .Append(":</b> ")
+                .Append(WebUtility.HtmlEncode(value))
+                .Append("</div>");
+        }
+
+        private static void AppendHeaderText(StringBuilder sb, string name, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return;
+            sb.Append(name).Append(": ").AppendLine(value);
+        }
+
+        private static string FormatSender(Outlook.MailItem item)
+        {
+            if (item == null) return "";
+            var name = SafeMailString(() => item.SenderName);
+            string email = null;
+            try { email = TryGetSmtp(item.Sender); } catch (COMException) { }
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                email = SafeMailString(() => item.SenderEmailAddress);
+            }
+            if (string.IsNullOrWhiteSpace(email)) return name;
+            if (string.IsNullOrWhiteSpace(name)) return email;
+            return name + " <" + email + ">";
+        }
+
+        private static string SafeMailString(Func<string> read)
+        {
+            try { return read?.Invoke() ?? ""; }
+            catch (COMException) { return ""; }
+        }
+
+        private static DateTime GetOriginalDate(Outlook.MailItem item)
+        {
+            if (item == null) return DateTime.MinValue;
+            try
+            {
+                if (item.SentOn != DateTime.MinValue) return item.SentOn;
+            }
+            catch (COMException) { }
+            try { return item.ReceivedTime; }
+            catch (COMException) { return DateTime.MinValue; }
+        }
+
+        private static string FormatMailDate(DateTime value)
+        {
+            return value == DateTime.MinValue
+                ? ""
+                : value.ToString("f", CultureInfo.CurrentCulture);
         }
 
         private static string JoinBodySections(params string[] sections)

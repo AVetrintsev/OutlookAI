@@ -13,7 +13,9 @@ namespace OutlookAI.Services.CustomActions
     public sealed class CustomActionRunner
     {
         private const string MissingContextMessage =
-            "Не удалось получить текст письма. Откройте или выберите сообщение и повторите действие.";
+            "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u0442\u0435\u043a\u0441\u0442 \u043f\u0438\u0441\u044c\u043c\u0430. \u041e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u0438\u043b\u0438 \u0432\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u0438 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435.";
+        private const string MissingSourceMessage =
+            "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0438\u043b\u0438 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u043f\u0438\u0441\u044c\u043c\u043e, \u0434\u043b\u044f \u043a\u043e\u0442\u043e\u0440\u043e\u0433\u043e \u043d\u0443\u0436\u043d\u043e \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u043e\u0442\u0432\u0435\u0442 \u0438\u043b\u0438 \u0432\u0441\u0442\u0440\u0435\u0447\u0443.";
 
         private readonly LiteLlmChatService _chat;
         private readonly IOutlookSurface _surface;
@@ -55,6 +57,8 @@ namespace OutlookAI.Services.CustomActions
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+            var output = NormalizeOutput(action.Output);
+            var responseSink = IsOutlookDraftOutput(output) ? new ChatEventSink() : sink;
             string text;
             if (allowedTools.Length > 0 && _toolHost != null)
             {
@@ -67,7 +71,7 @@ namespace OutlookAI.Services.CustomActions
                     },
                     userMessage,
                     _toolHost,
-                    sink,
+                    responseSink,
                     ct).ConfigureAwait(false);
                 text = turn.FinalAssistantText ?? "";
             }
@@ -76,11 +80,11 @@ namespace OutlookAI.Services.CustomActions
                 text = await _chat.CompleteWithoutToolsAsync(
                     PromptCatalog.Default.Get("custom_action_controlled"),
                     userMessage,
-                    sink,
+                    responseSink,
                     ct).ConfigureAwait(false);
             }
 
-            var result = ApplyOutput(action, text, ct);
+            var result = ApplyOutput(action, output, text, ct);
             _state.SetLastRun(action.Id, DateTimeOffset.UtcNow);
             return result;
         }
@@ -163,7 +167,7 @@ namespace OutlookAI.Services.CustomActions
             var search = _surface.SearchMessages(args, ct);
             if (search == null || search.Messages == null || search.Messages.Count == 0)
             {
-                return "Нет сообщений, соответствующих параметрам действия.";
+                return "\u041d\u0435\u0442 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439, \u0441\u043e\u043e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u044e\u0449\u0438\u0445 \u043f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u0430\u043c \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f.";
             }
 
             if (!ctx.IncludeFullBodies)
@@ -178,22 +182,59 @@ namespace OutlookAI.Services.CustomActions
 
         private CustomActionRunResult ApplyOutput(
             CustomActionDefinition action,
+            string output,
             string text,
             CancellationToken ct)
         {
-            var output = Normalize(action.Output, "chat");
-            if (output == "create_draft")
+            output = NormalizeOutput(output);
+            if (output == "create_reply")
             {
-                var draft = _surface.CreateDraft(new CreateDraftArgs
+                var sourceMessageId = FindSourceMessageId(action);
+                CreatedDraft draft;
+                try
                 {
-                    Subject = action.Title ?? "OutlookAI",
-                    BodyPlaintext = text ?? ""
-                });
+                    draft = _surface.CreateReplyDraft(new CreateReplyDraftArgs
+                    {
+                        SourceMessageId = sourceMessageId,
+                        BodyPlaintext = text ?? ""
+                    });
+                }
+                catch (InvalidOperationException ex) when (IsMissingSourceException(ex))
+                {
+                    return new CustomActionRunResult { Text = MissingSourceMessage, Output = output };
+                }
                 return new CustomActionRunResult
                 {
-                    Text = text,
+                    Text = "\u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a \u043e\u0442\u0432\u0435\u0442\u0430 \u0441\u043e\u0437\u0434\u0430\u043d",
                     Output = output,
-                    DraftId = draft?.DraftId
+                    DraftId = draft?.DraftId,
+                    DraftLocation = draft?.Location,
+                    DraftDisplayName = draft?.DisplayName
+                };
+            }
+            if (output == "create_meeting")
+            {
+                var sourceMessageId = FindSourceMessageId(action);
+                CreatedDraft draft;
+                try
+                {
+                    draft = _surface.CreateMeetingDraft(new CreateMeetingDraftArgs
+                    {
+                        SourceMessageId = sourceMessageId,
+                        BodyPlaintext = text ?? ""
+                    });
+                }
+                catch (InvalidOperationException ex) when (IsMissingSourceException(ex))
+                {
+                    return new CustomActionRunResult { Text = MissingSourceMessage, Output = output };
+                }
+                return new CustomActionRunResult
+                {
+                    Text = "\u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a \u0432\u0441\u0442\u0440\u0435\u0447\u0438 \u0441\u043e\u0437\u0434\u0430\u043d",
+                    Output = output,
+                    DraftId = draft?.DraftId,
+                    DraftLocation = draft?.Location,
+                    DraftDisplayName = draft?.DisplayName
                 };
             }
             if (output == "export_pdf")
@@ -242,13 +283,39 @@ namespace OutlookAI.Services.CustomActions
             };
         }
 
+        private static bool IsMissingSourceException(InvalidOperationException ex)
+        {
+            var message = ex?.Message ?? "";
+            return message.IndexOf("source message", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("selected", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private string FindSourceMessageId(CustomActionDefinition action)
+        {
+            var ctx = action?.Context ?? new CustomActionContext();
+            try
+            {
+                var selection = _surface.GetCurrentSelection(
+                    includeFullBodies: false,
+                    maxItems: Clamp(ctx.MaxItems, 1, 100, 20));
+                var selected = selection?.Messages?
+                    .FirstOrDefault(message => !string.IsNullOrWhiteSpace(message?.Id));
+                if (!string.IsNullOrWhiteSpace(selected?.Id))
+                {
+                    return selected.Id;
+                }
+            }
+            catch { }
+            return null;
+        }
+
         private string BuildControlledUserMessage(CustomActionDefinition action, string context)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("Пользовательская инструкция:");
+            sb.AppendLine("\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c\u0441\u043a\u0430\u044f \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044f:");
             sb.AppendLine(action.Prompt ?? "");
             sb.AppendLine();
-            sb.AppendLine("Контекст:");
+            sb.AppendLine("\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442:");
             sb.AppendLine(context ?? "");
             return sb.ToString();
         }
@@ -292,9 +359,9 @@ namespace OutlookAI.Services.CustomActions
 
         private static string FormatCompose(ComposeStateResult state, bool includeAttachments)
         {
-            if (state == null) return "Открытое сообщение недоступно.";
+            if (state == null) return "\u041e\u0442\u043a\u0440\u044b\u0442\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e.";
             var sb = new StringBuilder();
-            sb.AppendLine("Текущее открытое сообщение/черновик:");
+            sb.AppendLine("\u0422\u0435\u043a\u0443\u0449\u0435\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435/\u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a:");
             sb.AppendLine("Subject: " + (state.Subject ?? ""));
             sb.AppendLine("To: " + string.Join(", ", state.ToRecipients ?? new string[0]));
             sb.AppendLine("Cc: " + string.Join(", ", state.CcRecipients ?? new string[0]));
@@ -311,7 +378,7 @@ namespace OutlookAI.Services.CustomActions
         {
             if (selection == null || selection.Messages == null || selection.Messages.Count == 0)
             {
-                return "Нет выбранных сообщений.";
+                return "\u041d\u0435\u0442 \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0445 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439.";
             }
             return FormatDetails(selection.Messages, includeAttachments);
         }
@@ -379,6 +446,18 @@ namespace OutlookAI.Services.CustomActions
         {
             if (value <= 0) value = fallback;
             return Math.Max(min, Math.Min(max, value));
+        }
+
+        private static string NormalizeOutput(string output)
+        {
+            var normalized = Normalize(output, "chat");
+            return normalized == "create_draft" ? "create_reply" : normalized;
+        }
+
+        private static bool IsOutlookDraftOutput(string output)
+        {
+            output = NormalizeOutput(output);
+            return output == "create_reply" || output == "create_meeting";
         }
 
         private static string Normalize(string value, string fallback)

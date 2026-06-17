@@ -28,6 +28,7 @@ namespace OutlookAI.Services.CustomActions
 
         public static JObject ToJson(CustomActionDefinition action)
         {
+            var output = action.Output == "create_draft" ? "create_reply" : action.Output ?? "chat";
             return new JObject(
                 new JProperty("id", action.Id),
                 new JProperty("label", action.Title),
@@ -41,7 +42,7 @@ namespace OutlookAI.Services.CustomActions
                 new JProperty("max_items", action.Context?.MaxItems ?? 20),
                 new JProperty("include_full_bodies", action.Context?.IncludeFullBodies ?? true),
                 new JProperty("include_attachments", action.Context?.IncludeAttachments ?? false),
-                new JProperty("output", action.Output ?? "chat"),
+                new JProperty("output", output),
                 new JProperty("allowed_tools", new JArray(action.AllowedTools ?? new string[0])));
         }
     }

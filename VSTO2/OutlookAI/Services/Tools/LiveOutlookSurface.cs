@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -874,12 +875,86 @@ namespace OutlookAI.Services.Tools
                     {
                         DraftId = _ids.Shorten(draft.EntryID),
                         Location = "Drafts",
+                        DisplayName = string.IsNullOrWhiteSpace(draft.Subject) ? "Draft" : draft.Subject,
                     };
                 }
                 catch (COMException ex)
                 {
                     throw new InvalidOperationException("CreateDraft failed: " + ex.Message, ex);
                 }
+            });
+
+        public CreatedDraft CreateReplyDraft(CreateReplyDraftArgs args) =>
+            Run(() =>
+            {
+                try
+                {
+                    var original = ResolveMailItem(args?.SourceMessageId);
+                    if (original == null)
+                    {
+                        throw new InvalidOperationException("No source message is selected.");
+                    }
+
+                    var draft = original.ReplyAll();
+                    draft.Display(false);
+                    draft.HTMLBody = PlainTextToHtml(args?.BodyPlaintext) + "<br>" + (draft.HTMLBody ?? "");
+                    draft.Save();
+                    return CreatedFromMail(draft, "Drafts", "Черновик ответа");
+                }
+                catch (COMException ex)
+                {
+                    throw new InvalidOperationException("CreateReplyDraft failed: " + ex.Message, ex);
+                }
+            });
+
+        public CreatedDraft CreateMeetingDraft(CreateMeetingDraftArgs args) =>
+            Run(() =>
+            {
+                try
+                {
+                    var original = ResolveMailItem(args?.SourceMessageId);
+                    if (original == null)
+                    {
+                        throw new InvalidOperationException("No source message is selected.");
+                    }
+
+                    var meeting = (Outlook.AppointmentItem)_application.CreateItem(Outlook.OlItemType.olAppointmentItem);
+                    meeting.MeetingStatus = Outlook.OlMeetingStatus.olMeeting;
+                    meeting.Subject = original.Subject ?? "";
+                    AddMeetingRecipients(meeting, original);
+                    meeting.Display(false);
+                    var body = (args?.BodyPlaintext ?? "").Trim();
+                    var signature = meeting.Body ?? "";
+                    var history = original.Body ?? "";
+                    meeting.Body = JoinBodySections(body, signature, history);
+                    try { meeting.Recipients.ResolveAll(); } catch (COMException) { }
+                    meeting.Save();
+                    return CreatedFromAppointment(meeting, "Calendar", "Черновик встречи");
+                }
+                catch (COMException ex)
+                {
+                    throw new InvalidOperationException("CreateMeetingDraft failed: " + ex.Message, ex);
+                }
+            });
+
+        public void OpenItem(string itemId) =>
+            Run(() =>
+            {
+                try
+                {
+                    var entryId = _ids.Resolve(itemId);
+                    var item = _application.Session.GetItemFromID(entryId);
+                    if (item is Outlook.MailItem mail)
+                    {
+                        mail.Display(false);
+                    }
+                    else if (item is Outlook.AppointmentItem appointment)
+                    {
+                        appointment.Display(false);
+                    }
+                }
+                catch (COMException) { }
+                catch (KeyNotFoundException) { }
             });
 
         public void MarkAsRead(string messageId, bool read) =>
@@ -1043,6 +1118,101 @@ namespace OutlookAI.Services.Tools
         private T Run<T>(Func<T> fn) => _marshaller.RunAsync(fn, CancellationToken.None).GetAwaiter().GetResult();
 
         private void Run(Action fn) => _marshaller.RunAsync(fn, CancellationToken.None).GetAwaiter().GetResult();
+
+        private Outlook.MailItem ResolveMailItem(string shortId)
+        {
+            if (string.IsNullOrWhiteSpace(shortId)) return ResolveOpenMailItem();
+            try
+            {
+                var entryId = _ids.Resolve(shortId);
+                return _application.Session.GetItemFromID(entryId) as Outlook.MailItem;
+            }
+            catch (COMException) { return null; }
+            catch (KeyNotFoundException) { return null; }
+        }
+
+        private Outlook.MailItem ResolveOpenMailItem()
+        {
+            try
+            {
+                var item = _composeInspector?.CurrentItem as Outlook.MailItem;
+                if (item != null) return item;
+            }
+            catch (COMException) { }
+
+            try
+            {
+                var inspector = _application.ActiveInspector();
+                return inspector?.CurrentItem as Outlook.MailItem;
+            }
+            catch (COMException) { return null; }
+        }
+
+        private CreatedDraft CreatedFromMail(Outlook.MailItem item, string location, string fallbackName)
+        {
+            if (item == null) return null;
+            return new CreatedDraft
+            {
+                DraftId = _ids.Shorten(item.EntryID ?? ""),
+                Location = location,
+                DisplayName = string.IsNullOrWhiteSpace(item.Subject) ? fallbackName : item.Subject,
+            };
+        }
+
+        private CreatedDraft CreatedFromAppointment(Outlook.AppointmentItem item, string location, string fallbackName)
+        {
+            if (item == null) return null;
+            return new CreatedDraft
+            {
+                DraftId = _ids.Shorten(item.EntryID ?? ""),
+                Location = location,
+                DisplayName = string.IsNullOrWhiteSpace(item.Subject) ? fallbackName : item.Subject,
+            };
+        }
+
+        private void AddMeetingRecipients(Outlook.AppointmentItem meeting, Outlook.MailItem original)
+        {
+            if (meeting == null || original == null) return;
+            var current = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var user = _application.Session.CurrentUser;
+                if (!string.IsNullOrWhiteSpace(user?.Name)) current.Add(user.Name.Trim());
+                var userSmtp = TryGetSmtp(user?.AddressEntry);
+                if (!string.IsNullOrWhiteSpace(userSmtp)) current.Add(userSmtp.Trim());
+            }
+            catch (COMException) { }
+
+            var added = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            Action<string> add = value =>
+            {
+                value = (value ?? "").Trim();
+                if (value.Length == 0 || current.Contains(value) || !added.Add(value)) return;
+                try { meeting.Recipients.Add(value); } catch (COMException) { }
+            };
+
+            try { add(TryGetSmtp(original.Sender) ?? original.SenderEmailAddress ?? original.SenderName); }
+            catch (COMException) { }
+            foreach (var recipient in SplitAddresses(original.To)) add(recipient);
+            foreach (var recipient in SplitAddresses(original.CC)) add(recipient);
+        }
+
+        private static string PlainTextToHtml(string text)
+        {
+            var encoded = WebUtility.HtmlEncode(text ?? "")
+                .Replace("\r\n", "\n")
+                .Replace("\n", "<br>");
+            return "<div>" + encoded + "</div>";
+        }
+
+        private static string JoinBodySections(params string[] sections)
+        {
+            return string.Join(
+                Environment.NewLine + Environment.NewLine,
+                (sections ?? new string[0])
+                    .Select(section => (section ?? "").Trim())
+                    .Where(section => section.Length > 0));
+        }
 
         private static void SaveNewFile(Stream source, string fullPath)
         {

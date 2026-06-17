@@ -24,6 +24,9 @@ namespace OutlookAI.Services.Tools
         FileSavedResult ExportExcel(ExportExcelArgs args, CancellationToken ct = default(CancellationToken));
         FileSavedResult ExportPdf(ExportPdfArgs args, CancellationToken ct = default(CancellationToken));
         CreatedDraft CreateDraft(CreateDraftArgs args);
+        CreatedDraft CreateReplyDraft(CreateReplyDraftArgs args);
+        CreatedDraft CreateMeetingDraft(CreateMeetingDraftArgs args);
+        void OpenItem(string itemId);
         void MarkAsRead(string messageId, bool read);
         void FlagMessage(string messageId, string flag);
         void SetCategory(string messageId, string category);
@@ -163,6 +166,19 @@ namespace OutlookAI.Services.Tools
     {
         public string DraftId { get; set; }
         public string Location { get; set; }
+        public string DisplayName { get; set; }
+    }
+
+    public sealed class CreateReplyDraftArgs
+    {
+        public string SourceMessageId { get; set; }
+        public string BodyPlaintext { get; set; }
+    }
+
+    public sealed class CreateMeetingDraftArgs
+    {
+        public string SourceMessageId { get; set; }
+        public string BodyPlaintext { get; set; }
     }
 
     /// <summary>

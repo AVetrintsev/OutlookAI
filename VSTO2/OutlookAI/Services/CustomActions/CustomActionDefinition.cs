@@ -87,5 +87,7 @@ namespace OutlookAI.Services.CustomActions
         public string Output { get; set; }
         public string FilePath { get; set; }
         public string DraftId { get; set; }
+        public string DraftLocation { get; set; }
+        public string DraftDisplayName { get; set; }
     }
 }

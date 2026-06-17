@@ -34,6 +34,12 @@ namespace OutlookAI.Tests.Services.Tools
             => throw new System.NotImplementedException();
         public virtual CreatedDraft CreateDraft(CreateDraftArgs args)
             => throw new System.NotImplementedException();
+        public virtual CreatedDraft CreateReplyDraft(CreateReplyDraftArgs args)
+            => throw new System.NotImplementedException();
+        public virtual CreatedDraft CreateMeetingDraft(CreateMeetingDraftArgs args)
+            => throw new System.NotImplementedException();
+        public virtual void OpenItem(string itemId)
+            => throw new System.NotImplementedException();
         public virtual void MarkAsRead(string messageId, bool read)
             => throw new System.NotImplementedException();
         public virtual void FlagMessage(string messageId, string flag)

@@ -176,6 +176,9 @@ namespace OutlookAI.TaskPane.Chat
                     case "custom_action":
                         _ = StartCustomActionAsync((string)payload?["id"] ?? "");
                         break;
+                    case "open_item":
+                        _surface?.OpenItem((string)payload?["id"] ?? "");
+                        break;
                     case "custom_action_create":
                         SaveCustomAction(payload);
                         _recommendationCache.Clear();
@@ -558,6 +561,15 @@ namespace OutlookAI.TaskPane.Chat
                         new JProperty("format", action.Output == "export_pdf" ? "pdf" : "file"));
                     await RunScript("outlookai.onFileSaved(" +
                         JsString(assistantId) + ", " + fileInfo.ToString(Newtonsoft.Json.Formatting.None) + ");");
+                }
+                if (!string.IsNullOrWhiteSpace(result.DraftId))
+                {
+                    var draftInfo = new JObject(
+                        new JProperty("id", result.DraftId),
+                        new JProperty("title", result.DraftDisplayName ?? result.Text ?? ""),
+                        new JProperty("location", result.DraftLocation ?? ""));
+                    await RunScript("outlookai.onDraftCreated(" +
+                        JsString(assistantId) + ", " + draftInfo.ToString(Newtonsoft.Json.Formatting.None) + ");");
                 }
                 await RunScript("outlookai.finalizeAssistantMessage(" + JsString(assistantId) + ", {});");
             }

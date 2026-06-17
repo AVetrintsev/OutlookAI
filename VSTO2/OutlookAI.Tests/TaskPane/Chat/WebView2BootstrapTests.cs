@@ -148,6 +148,20 @@ namespace OutlookAI.Tests.TaskPane.Chat
         }
 
         [Fact]
+        public void WebUi_CustomActionsSupportReplyAndMeetingOutputs()
+        {
+            var indexHtml = File.ReadAllText(FindSourceFile("OutlookAI", "WebUI", "index.html"));
+            var chatJs = File.ReadAllText(FindSourceFile("OutlookAI", "WebUI", "chat.js"));
+
+            Assert.Contains("value=\"create_reply\"", indexHtml);
+            Assert.Contains("value=\"create_meeting\"", indexHtml);
+            Assert.DoesNotContain("value=\"create_draft\"", indexHtml);
+            Assert.Contains("if (output === 'create_draft') output = 'create_reply';", chatJs);
+            Assert.Contains("onDraftCreated", chatJs);
+            Assert.Contains("open_item", chatJs);
+        }
+
+        [Fact]
         public void WebUi_ChatRendersExportErrorsAsActionableInlineCard()
         {
             var chatJs = File.ReadAllText(FindSourceFile("OutlookAI", "WebUI", "chat.js"));

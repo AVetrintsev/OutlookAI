@@ -605,6 +605,9 @@ namespace OutlookAI.TaskPane
             public FileSavedResult ExportExcel(ExportExcelArgs args, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) => null;
             public FileSavedResult ExportPdf(ExportPdfArgs args, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) => null;
             public CreatedDraft CreateDraft(CreateDraftArgs args) => null;
+            public CreatedDraft CreateReplyDraft(CreateReplyDraftArgs args) => null;
+            public CreatedDraft CreateMeetingDraft(CreateMeetingDraftArgs args) => null;
+            public void OpenItem(string itemId) { }
             public CurrentSelectionResult GetCurrentSelection(bool includeFullBodies, int maxItems)
                 => new CurrentSelectionResult { Folder = "", FolderId = "", Count = 0, Messages = new MessageDetail[0] };
             public void MarkAsRead(string messageId, bool read) { }

@@ -20,7 +20,7 @@
    JS -> Host:
      window.chrome.webview.postMessage(JSON.stringify({type:..., payload:...}))
       Message types: 'send', 'custom_action', 'stop', 'clear', 'copy', 'toolCardClicked',
-                     'open_file', 'reveal_in_explorer', 'export_pdf'
+                     'open_file', 'open_item', 'reveal_in_explorer', 'export_pdf'
    ============================================================ */
 
 (function() {
@@ -172,6 +172,14 @@
     });
   }
 
+  function postItemAction(type, id) {
+    if (!id) return;
+    postToHost({
+      type: type,
+      payload: { id: id }
+    });
+  }
+
   function findAssistantMessage(messageId) {
     if (messageId !== undefined && messageId !== null && messageId !== '') {
       var selector = '[data-message-id="' + cssEscape(messageId) + '"]';
@@ -230,6 +238,44 @@
 
     actions.appendChild(open);
     actions.appendChild(reveal);
+    card.appendChild(actions);
+
+    attach.appendChild(card);
+    scrollToBottom();
+  }
+
+  function appendDraftCardToMessage(messageId, draftInfo) {
+    if (!draftInfo || !draftInfo.id) return;
+
+    var msgEl = findAssistantMessage(messageId);
+    if (!msgEl) return;
+
+    var attach = msgEl.querySelector('.msg-attachments');
+    if (!attach) {
+      attach = elt('div', 'msg-attachments');
+      msgEl.appendChild(attach);
+    }
+
+    var title = draftInfo.title || '\u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a Outlook';
+    var location = draftInfo.location || 'Outlook';
+    var card = elt('div', 'file-card');
+    card.setAttribute('data-format', 'draft');
+    card.appendChild(elt('div', 'file-card-icon'));
+
+    var meta = elt('div', 'file-card-meta');
+    var name = elt('div', 'file-card-name', title);
+    name.title = title;
+    meta.appendChild(name);
+    meta.appendChild(elt('div', 'file-card-sub', location));
+    card.appendChild(meta);
+
+    var actions = elt('div', 'file-card-actions');
+    var open = elt('button', 'file-card-btn', '\u041e\u0442\u043a\u0440\u044b\u0442\u044c');
+    open.type = 'button';
+    open.addEventListener('click', function() {
+      postItemAction('open_item', draftInfo.id);
+    });
+    actions.appendChild(open);
     card.appendChild(actions);
 
     attach.appendChild(card);
@@ -547,7 +593,9 @@
     $customActionManualTo.value = toLocalDateTimeInput(action && action.manual_to);
     $customActionFullBodies.checked = action ? action.include_full_bodies !== false : true;
     $customActionAttachments.checked = !!(action && action.include_attachments);
-    $customActionOutput.value = action && action.output || 'chat';
+    var output = action && action.output || 'chat';
+    if (output === 'create_draft') output = 'create_reply';
+    $customActionOutput.value = output;
     renderCustomActionTools(action && action.allowed_tools || []);
     updateCustomActionFieldVisibility();
     $customActionDialog.hidden = false;
@@ -1025,6 +1073,10 @@
     onFileSaved: function(messageId, fileInfo) {
       appendFileCardToMessage(messageId, fileInfo);
       resetExportButton(messageId);
+    },
+
+    onDraftCreated: function(messageId, draftInfo) {
+      appendDraftCardToMessage(messageId, draftInfo);
     },
 
     onExportError: function(messageId, error) {

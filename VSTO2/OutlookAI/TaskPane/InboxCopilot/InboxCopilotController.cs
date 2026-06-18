@@ -326,7 +326,8 @@ namespace OutlookAI.TaskPane.InboxCopilot
                 var payload = CustomActionUiSerializer.Build(
                     _customActionStore.LoadCatalog(),
                     null,
-                    ToolManifestCatalog.Default.BuildUiToolsArray());
+                    ToolManifestCatalog.Default.BuildUiToolsArray(),
+                    GetApplicabilityContext(sel));
                 _ = RunScript("outlookai.setActionCatalog(" +
                     payload.ToString(Newtonsoft.Json.Formatting.None) + ");");
             }
@@ -367,7 +368,9 @@ namespace OutlookAI.TaskPane.InboxCopilot
             {
                 var ids = await _recommendationService.RecommendAsync(
                     selection,
-                    _customActionStore.LoadCatalog().Groups,
+                    CustomActionApplicability.FilterCatalog(
+                        _customActionStore.LoadCatalog(),
+                        GetApplicabilityContext(selection)).Groups,
                     token).ConfigureAwait(false);
                 if (token.IsCancellationRequested) return;
                 var current = _surface.GetCurrentSelection(includeFullBodies: false, maxItems: 3);
@@ -392,6 +395,28 @@ namespace OutlookAI.TaskPane.InboxCopilot
             return RunScript("outlookai.setActionRecommendationState(" +
                 JsString(state) + ", " +
                 new JArray(ids ?? new string[0]).ToString(Newtonsoft.Json.Formatting.None) + ");");
+        }
+
+        private CustomActionApplicabilityContext GetApplicabilityContext(CurrentSelectionResult selection = null)
+        {
+            try
+            {
+                selection = selection ?? _surface?.GetCurrentSelection(includeFullBodies: false, maxItems: 1);
+                var first = selection?.Messages?.FirstOrDefault();
+                if (first != null)
+                {
+                    return new CustomActionApplicabilityContext
+                    {
+                        ItemType = first.ItemType,
+                        Direction = first.Direction
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                TraceLog.Write("GetApplicabilityContext error: " + ex.Message, "InboxCopilot");
+            }
+            return new CustomActionApplicabilityContext();
         }
 
         private void SaveCustomAction(JObject payload)
@@ -462,7 +487,11 @@ namespace OutlookAI.TaskPane.InboxCopilot
                     },
                     Output = (string)payload["output"] ?? "chat",
                     AllowTools = allowedTools.Length > 0,
-                    AllowedTools = allowedTools
+                    AllowedTools = allowedTools,
+                    ApplicabilityItemType = CustomActionApplicability.NormalizeItemType(
+                        (string)payload["applicability_item_type"]),
+                    ApplicabilityDirection = CustomActionApplicability.NormalizeDirection(
+                        (string)payload["applicability_direction"])
                 };
 
                 _customActionStore.Upsert((string)payload["group_id"], action);
@@ -647,6 +676,11 @@ namespace OutlookAI.TaskPane.InboxCopilot
             if (action == null)
             {
                 await RunScript("outlookai.showError(" + JsString("Пользовательское действие не найдено.") + ");");
+                return;
+            }
+            if (!CustomActionApplicability.IsApplicable(action, GetApplicabilityContext()))
+            {
+                await RunScript("outlookai.showError(" + JsString("Действие недоступно для текущего письма или встречи.") + ");");
                 return;
             }
 

@@ -90,7 +90,10 @@ namespace OutlookAI.Services.CustomActions
                     {
                         var copy = group.Clone();
                         copy.Order = index;
-                        copy.Actions = copy.Actions.Where(IsValid).ToArray();
+                        copy.Actions = copy.Actions
+                            .Where(IsValid)
+                            .Select(NormalizeAction)
+                            .ToArray();
                         return copy;
                     })
                     .ToArray()
@@ -270,6 +273,14 @@ namespace OutlookAI.Services.CustomActions
                 && !string.IsNullOrWhiteSpace(action.Title)
                 && !string.IsNullOrWhiteSpace(action.Prompt)
                 && action.Context != null;
+        }
+
+        private static CustomActionDefinition NormalizeAction(CustomActionDefinition action)
+        {
+            var copy = action.Clone();
+            copy.ApplicabilityItemType = CustomActionApplicability.NormalizeItemType(copy.ApplicabilityItemType);
+            copy.ApplicabilityDirection = CustomActionApplicability.NormalizeDirection(copy.ApplicabilityDirection);
+            return copy;
         }
     }
 }

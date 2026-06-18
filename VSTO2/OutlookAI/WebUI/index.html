@@ -135,6 +135,22 @@
             <label id="customActionFullBodiesField"><input id="customActionFullBodies" type="checkbox" checked> Полные тела писем</label>
             <label id="customActionAttachmentsField"><input id="customActionAttachments" type="checkbox"> Вложения/метаданные</label>
           </div>
+          <div class="field-grid">
+            <label class="field-label">Показывать для
+              <select id="customActionApplicabilityItemType" class="field-input">
+                <option value="all">Всего</option>
+                <option value="mail">Писем</option>
+                <option value="meeting">Встреч</option>
+              </select>
+            </label>
+            <label class="field-label">Направление
+              <select id="customActionApplicabilityDirection" class="field-input">
+                <option value="all">Всех</option>
+                <option value="incoming">Входящих</option>
+                <option value="outgoing">Исходящих</option>
+              </select>
+            </label>
+          </div>
           <label class="field-label">Результат
             <select id="customActionOutput" class="field-input">
               <option value="chat">Показать в чате</option>

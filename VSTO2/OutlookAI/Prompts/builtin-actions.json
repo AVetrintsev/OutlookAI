@@ -110,7 +110,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "understand_02",
@@ -129,7 +131,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "understand_03",
@@ -148,7 +152,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "understand_04",
@@ -167,7 +173,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "understand_05",
@@ -186,7 +194,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         }
       ]
     },
@@ -212,7 +222,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "incoming"
         },
         {
           "id": "reply_02",
@@ -231,7 +243,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "incoming"
         },
         {
           "id": "reply_03",
@@ -250,7 +264,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "incoming"
         },
         {
           "id": "reply_04",
@@ -269,7 +285,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "outgoing"
         },
         {
           "id": "reply_05",
@@ -288,7 +306,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "outgoing"
         }
       ]
     },
@@ -314,7 +334,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "decide_02",
@@ -333,7 +355,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "decide_03",
@@ -352,7 +376,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "decide_04",
@@ -371,7 +397,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "decide_05",
@@ -390,7 +418,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         }
       ]
     },
@@ -416,7 +446,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "incoming"
         },
         {
           "id": "delegate_02",
@@ -435,7 +467,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "incoming"
         },
         {
           "id": "delegate_03",
@@ -454,7 +488,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "incoming"
         },
         {
           "id": "delegate_04",
@@ -473,7 +509,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "incoming"
         },
         {
           "id": "delegate_05",
@@ -492,7 +530,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "incoming"
         },
         {
           "id": "delegate_06",
@@ -511,7 +551,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "incoming"
         }
       ]
     },
@@ -537,7 +579,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "meetings_02",
@@ -556,7 +600,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "incoming"
         },
         {
           "id": "meetings_03",
@@ -575,7 +621,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "meeting",
+          "applicability_direction": "all"
         },
         {
           "id": "meetings_04",
@@ -594,7 +642,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "meeting",
+          "applicability_direction": "all"
         }
       ]
     },
@@ -620,7 +670,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "control_02",
@@ -639,7 +691,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "outgoing"
         },
         {
           "id": "control_03",
@@ -658,7 +712,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "outgoing"
         },
         {
           "id": "control_04",
@@ -677,7 +733,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "outgoing"
         }
       ]
     },
@@ -703,7 +761,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "manager_02",
@@ -722,7 +782,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "manager_03",
@@ -741,7 +803,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "manager_04",
@@ -760,7 +824,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "manager_05",
@@ -779,7 +845,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "manager_06",
@@ -798,7 +866,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         }
       ]
     },
@@ -824,7 +894,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "long_thread_02",
@@ -843,7 +915,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "long_thread_03",
@@ -862,7 +936,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "long_thread_04",
@@ -881,7 +957,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
         },
         {
           "id": "long_thread_05",
@@ -900,7 +978,9 @@
           },
           "output": "chat",
           "allow_tools": false,
-          "allowed_tools": []
+          "allowed_tools": [],
+          "applicability_item_type": "mail",
+          "applicability_direction": "incoming"
         }
       ]
     }

@@ -5,8 +5,13 @@ namespace OutlookAI.Services.CustomActions
 {
     public static class CustomActionUiSerializer
     {
-        public static JObject Build(CustomActionFile catalog, string[] recommendationIds, JArray tools)
+        public static JObject Build(
+            CustomActionFile catalog,
+            string[] recommendationIds,
+            JArray tools,
+            CustomActionApplicabilityContext applicability = null)
         {
+            catalog = CustomActionApplicability.FilterCatalog(catalog, applicability);
             var resettableGroups = new System.Collections.Generic.HashSet<string>(
                 ActionCatalog.Default.AssistantGroups().Select(group => group.Id),
                 System.StringComparer.OrdinalIgnoreCase);
@@ -29,6 +34,8 @@ namespace OutlookAI.Services.CustomActions
         public static JObject ToJson(CustomActionDefinition action)
         {
             var output = action.Output == "create_draft" ? "create_reply" : action.Output ?? "chat";
+            var itemType = CustomActionApplicability.NormalizeItemType(action.ApplicabilityItemType);
+            var direction = CustomActionApplicability.NormalizeDirection(action.ApplicabilityDirection);
             return new JObject(
                 new JProperty("id", action.Id),
                 new JProperty("label", action.Title),
@@ -43,6 +50,8 @@ namespace OutlookAI.Services.CustomActions
                 new JProperty("include_full_bodies", action.Context?.IncludeFullBodies ?? true),
                 new JProperty("include_attachments", action.Context?.IncludeAttachments ?? false),
                 new JProperty("output", output),
+                new JProperty("applicability_item_type", itemType),
+                new JProperty("applicability_direction", direction),
                 new JProperty("allowed_tools", new JArray(action.AllowedTools ?? new string[0])));
         }
     }

@@ -42,6 +42,15 @@ namespace OutlookAI.Services.CustomActions
             if (action == null) throw new ArgumentNullException(nameof(action));
             sink = sink ?? new ChatEventSink();
 
+            if (!CustomActionApplicability.IsApplicable(action, BuildApplicabilityContext()))
+            {
+                return new CustomActionRunResult
+                {
+                    Text = "Действие недоступно для текущего письма или встречи.",
+                    Output = "chat"
+                };
+            }
+
             var context = BuildContext(action, ct);
             if (IsMissingContext(context))
             {
@@ -87,6 +96,40 @@ namespace OutlookAI.Services.CustomActions
             var result = ApplyOutput(action, output, text, ct);
             _state.SetLastRun(action.Id, DateTimeOffset.UtcNow);
             return result;
+        }
+
+        private CustomActionApplicabilityContext BuildApplicabilityContext()
+        {
+            try
+            {
+                var selection = _surface.GetCurrentSelection(includeFullBodies: false, maxItems: 1);
+                var first = selection?.Messages?.FirstOrDefault();
+                if (first != null)
+                {
+                    return new CustomActionApplicabilityContext
+                    {
+                        ItemType = first.ItemType,
+                        Direction = first.Direction
+                    };
+                }
+            }
+            catch { }
+
+            try
+            {
+                var compose = _surface.GetCurrentComposeState(includeFullBody: false);
+                if (compose != null)
+                {
+                    return new CustomActionApplicabilityContext
+                    {
+                        ItemType = compose.ItemType,
+                        Direction = compose.Direction
+                    };
+                }
+            }
+            catch { }
+
+            return new CustomActionApplicabilityContext();
         }
 
         private string BuildContext(CustomActionDefinition action, CancellationToken ct)
@@ -362,6 +405,10 @@ namespace OutlookAI.Services.CustomActions
             if (state == null) return "\u041e\u0442\u043a\u0440\u044b\u0442\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e.";
             var sb = new StringBuilder();
             sb.AppendLine("\u0422\u0435\u043a\u0443\u0449\u0435\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435/\u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a:");
+            sb.AppendLine("Current user: " + FormatIdentity(state.CurrentUser));
+            sb.AppendLine("Item type: " + (state.ItemType ?? "mail"));
+            sb.AppendLine("Direction: " + (state.Direction ?? "unknown"));
+            sb.AppendLine("My role: " + (state.MyRole ?? "unknown"));
             sb.AppendLine("Subject: " + (state.Subject ?? ""));
             sb.AppendLine("To: " + string.Join(", ", state.ToRecipients ?? new string[0]));
             sb.AppendLine("Cc: " + string.Join(", ", state.CcRecipients ?? new string[0]));
@@ -428,10 +475,29 @@ namespace OutlookAI.Services.CustomActions
             foreach (var m in messages ?? Enumerable.Empty<MessageDetail>())
             {
                 sb.AppendLine("---");
+                sb.AppendLine("Current user: " + FormatIdentity(m.CurrentUser));
+                sb.AppendLine("Item type: " + (m.ItemType ?? "mail"));
+                sb.AppendLine("Direction: " + (m.Direction ?? "unknown"));
+                sb.AppendLine("My role: " + (m.MyRole ?? "unknown"));
                 sb.AppendLine("Subject: " + (m.Subject ?? ""));
                 sb.AppendLine("From: " + (m.From ?? ""));
                 sb.AppendLine("To: " + string.Join(", ", m.To ?? new string[0]));
+                sb.AppendLine("Cc: " + string.Join(", ", m.Cc ?? new string[0]));
+                if (m.SentAt != DateTimeOffset.MinValue) sb.AppendLine("Sent: " + m.SentAt.ToString("o"));
                 sb.AppendLine("Received: " + m.ReceivedAt.ToString("o"));
+                sb.AppendLine("Is from me: " + m.IsFromMe);
+                sb.AppendLine("Is to me: " + m.IsToMe);
+                sb.AppendLine("Is cc to me: " + m.IsCcToMe);
+                if ((m.ItemType ?? "") == "meeting" || !string.IsNullOrWhiteSpace(m.Organizer))
+                {
+                    sb.AppendLine("Organizer: " + (m.Organizer ?? ""));
+                    sb.AppendLine("Required attendees: " + string.Join(", ", m.RequiredAttendees ?? new string[0]));
+                    sb.AppendLine("Optional attendees: " + string.Join(", ", m.OptionalAttendees ?? new string[0]));
+                    if (m.Start.HasValue) sb.AppendLine("Start: " + m.Start.Value.ToString("o"));
+                    if (m.End.HasValue) sb.AppendLine("End: " + m.End.Value.ToString("o"));
+                    if (!string.IsNullOrWhiteSpace(m.Location)) sb.AppendLine("Location: " + m.Location);
+                    if (!string.IsNullOrWhiteSpace(m.MeetingState)) sb.AppendLine("Meeting state: " + m.MeetingState);
+                }
                 if (includeAttachments && m.Attachments != null && m.Attachments.Count > 0)
                 {
                     sb.AppendLine("Attachments: " + string.Join(", ", m.Attachments.Select(a => a.Filename)));
@@ -440,6 +506,16 @@ namespace OutlookAI.Services.CustomActions
                 sb.AppendLine(m.BodyPlaintext ?? "");
             }
             return sb.ToString();
+        }
+
+        private static string FormatIdentity(MailboxIdentity identity)
+        {
+            if (identity == null) return "";
+            if (!string.IsNullOrWhiteSpace(identity.DisplayName) && !string.IsNullOrWhiteSpace(identity.SmtpAddress))
+            {
+                return identity.DisplayName + " <" + identity.SmtpAddress + ">";
+            }
+            return identity.SmtpAddress ?? identity.DisplayName ?? "";
         }
 
         private static int Clamp(int value, int min, int max, int fallback)

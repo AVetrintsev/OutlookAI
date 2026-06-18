@@ -19,6 +19,8 @@ namespace OutlookAI.Tests.Services.CustomActions
 
             Assert.Equal("Суть письма", action.Title);
             Assert.Equal("related_thread", action.Context.Source);
+            Assert.Equal("mail", action.ApplicabilityItemType);
+            Assert.Equal("incoming", action.ApplicabilityDirection);
             Assert.Equal("outlook_read_message", Assert.Single(action.AllowedTools));
         }
 
@@ -81,7 +83,9 @@ namespace OutlookAI.Tests.Services.CustomActions
                                     IncludeFullBodies = true,
                                     MaxItems = 20
                                 },
-                                Output = "chat"
+                                Output = "chat",
+                                ApplicabilityItemType = "mail",
+                                ApplicabilityDirection = "incoming"
                             }
                         }
                     }

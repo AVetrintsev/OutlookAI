@@ -35,6 +35,7 @@ namespace OutlookAI.Services.Tools
                         new JObject(
                             new JProperty("filename", a.Filename),
                             new JProperty("size_bytes", a.SizeBytes))))));
+            OutlookJsonProjection.AddComposeContext(json, state);
             if (state.InReplyTo != null)
             {
                 json["in_reply_to"] = new JObject(

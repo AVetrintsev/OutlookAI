@@ -16,11 +16,21 @@ namespace OutlookAI.Tests.Services.Tools
                 OnRead = (id, full) => new MessageDetail
                 {
                     Id = id,
+                    ItemType = "mail",
+                    Direction = "incoming",
+                    MyRole = "recipient",
+                    CurrentUser = new MailboxIdentity
+                    {
+                        DisplayName = "Bob",
+                        SmtpAddress = "bob@example.com",
+                        Aliases = new[] { "b@example.com" }
+                    },
                     Subject = "Hello",
                     From = "alice@example.com",
                     To = new[] { "bob@example.com" },
                     Cc = new string[0],
                     ReceivedAt = DateTimeOffset.Parse("2026-05-10T12:00:00Z"),
+                    IsToMe = true,
                     BodyPlaintext = "world",
                     BodyTruncated = false,
                     Attachments = new AttachmentSummary[0],
@@ -33,6 +43,11 @@ namespace OutlookAI.Tests.Services.Tools
                 "{\"message_id\":\"m1\"}", surface, CancellationToken.None);
             Assert.Contains("\"id\":\"m1\"", json);
             Assert.Contains("\"subject\":\"Hello\"", json);
+            Assert.Contains("\"item_type\":\"mail\"", json);
+            Assert.Contains("\"direction\":\"incoming\"", json);
+            Assert.Contains("\"my_role\":\"recipient\"", json);
+            Assert.Contains("\"smtp_address\":\"bob@example.com\"", json);
+            Assert.Contains("\"is_to_me\":true", json);
             Assert.Contains("\"body_plaintext\":\"world\"", json);
             Assert.Contains("\"in_reply_to_message_id\":null", json);
         }

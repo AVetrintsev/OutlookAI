@@ -52,21 +52,7 @@ namespace OutlookAI.Services.Tools
 
                 var json = new JObject(
                     new JProperty("messages", new JArray(messages.Select(m =>
-                        new JObject(
-                            new JProperty("id", m.Id ?? ""),
-                            new JProperty("subject", m.Subject ?? ""),
-                            new JProperty("from", m.From ?? ""),
-                            new JProperty("to", new JArray((m.To ?? new string[0]).Cast<object>())),
-                            new JProperty("cc", new JArray((m.Cc ?? new string[0]).Cast<object>())),
-                            new JProperty("received_at", m.ReceivedAt.ToString("o")),
-                            new JProperty("body_plaintext", m.BodyPlaintext ?? ""),
-                            new JProperty("body_truncated", m.BodyTruncated),
-                            new JProperty("attachments", new JArray((m.Attachments ?? new AttachmentSummary[0]).Select(a =>
-                                new JObject(
-                                    new JProperty("filename", a.Filename ?? ""),
-                                    new JProperty("size_bytes", a.SizeBytes))))),
-                            new JProperty("in_reply_to_message_id", m.InReplyToMessageId ?? ""),
-                            new JProperty("conversation_topic", m.ConversationTopic ?? ""))))));
+                        OutlookJsonProjection.MessageDetail(m, includeBody)))));
                 return Task.FromResult(json.ToString(Newtonsoft.Json.Formatting.None));
             }
             catch (OperationCanceledException)

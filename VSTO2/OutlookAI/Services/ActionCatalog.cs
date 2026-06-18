@@ -104,14 +104,18 @@ namespace OutlookAI.Services
         {
             var action = new CustomActionDefinition
             {
-                Id = (string)obj?["id"],
-                Title = (string)obj?["title"],
-                Description = (string)obj?["description"] ?? "",
-                Prompt = (string)obj?["prompt"],
-                Output = (string)obj?["output"] ?? "chat",
-                AllowTools = (bool?)obj?["allow_tools"] ?? false,
+                Id = (string)(obj?["id"]),
+                Title = (string)(obj?["title"]),
+                Description = (string)(obj?["description"]) ?? "",
+                Prompt = (string)(obj?["prompt"]),
+                Output = (string)(obj?["output"]) ?? "chat",
+                AllowTools = (bool?)(obj?["allow_tools"]) ?? false,
                 AllowedTools = (obj?["allowed_tools"] as JArray)?.Values<string>().ToArray()
                     ?? new string[0],
+                ApplicabilityItemType = CustomActionApplicability.NormalizeItemType(
+                    (string)(obj?["applicability_item_type"])),
+                ApplicabilityDirection = CustomActionApplicability.NormalizeDirection(
+                    (string)(obj?["applicability_direction"])),
                 Context = obj?["context"]?.ToObject<CustomActionContext>()
                     ?? new CustomActionContext
                     {

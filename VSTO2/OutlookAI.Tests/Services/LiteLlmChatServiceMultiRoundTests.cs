@@ -148,6 +148,73 @@ namespace OutlookAI.Tests.Services
         }
 
         [Fact]
+        public async Task RunTurnAsync_RawToolResultJson_ForDirectionQuestion_AnswersFromRoleFields()
+        {
+            var fake = new FakeHttpMessageHandler();
+            fake.QueueSse(HttpStatusCode.OK,
+                "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"outlook_get_current_selection\",\"arguments\":\"{\\\"include_full_bodies\\\":true}\"}}]}}]}\n\n"
+                + "data: [DONE]\n\n");
+            fake.QueueSse(HttpStatusCode.OK,
+                "data: {\"choices\":[{\"delta\":{\"content\":\"{ \\\"folder\\\": \\\"Входящие\\\", \\\"count\\\": 1, \\\"messages\\\": [ { \\\"subject\\\": \\\"Re: Компания Металл Профиль\\\", \\\"from\\\": \\\"Куроедов Андрей Витальевич <kuroedov.av@metallprofil.ru>\\\", \\\"to\\\": [\\\"vetrintsev@mail.ru\\\"], \\\"direction\\\": \\\"incoming\\\", \\\"my_role\\\": \\\"recipient\\\", \\\"is_from_me\\\": false, \\\"is_to_me\\\": true, \\\"body_plaintext\\\": \\\"Добрый день.\\\" } ] }\"}}]}\n\n"
+                + "data: [DONE]\n\n");
+
+            using (var credentials = new LiteLlmCredentialService())
+            using (var chatHttp = new HttpClient(fake))
+            using (var chat = new LiteLlmChatService(credentials, chatHttp))
+            {
+                var tools = new FakeToolHost();
+                tools.Queue("outlook_get_current_selection",
+                    "{\"folder\":\"Входящие\",\"count\":1,\"messages\":[{\"direction\":\"incoming\",\"my_role\":\"recipient\",\"is_from_me\":false,\"is_to_me\":true}]}");
+
+                var result = await chat.RunTurnAsync(
+                    new ConversationContext(),
+                    "Это письмо отправил я или мне?",
+                    tools,
+                    new CapturingChatEventSink(),
+                    CancellationToken.None);
+
+                Assert.Equal(StopReason.Completed, result.StopReason);
+                Assert.Contains("Это письмо пришло вам.", result.FinalAssistantText);
+                Assert.Contains("Куроедов Андрей Витальевич", result.FinalAssistantText);
+                Assert.DoesNotContain("Сводка выбранной переписки", result.FinalAssistantText);
+                Assert.DoesNotContain("\"messages\"", result.FinalAssistantText);
+            }
+        }
+
+        [Fact]
+        public async Task RunTurnAsync_StructuredEchoAfterToolResult_AnswersFromToolOutput()
+        {
+            var fake = new FakeHttpMessageHandler();
+            fake.QueueSse(HttpStatusCode.OK,
+                "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"outlook_get_current_selection\",\"arguments\":\"{\\\"include_full_bodies\\\":true}\"}}]}}]}\n\n"
+                + "data: [DONE]\n\n");
+            fake.QueueSse(HttpStatusCode.OK,
+                "data: {\"choices\":[{\"delta\":{\"content\":\"{ \\\"text\\\": \\\"Это письмо отправил я или мне?\\\" }\"}}]}\n\n"
+                + "data: [DONE]\n\n");
+
+            using (var credentials = new LiteLlmCredentialService())
+            using (var chatHttp = new HttpClient(fake))
+            using (var chat = new LiteLlmChatService(credentials, chatHttp))
+            {
+                var tools = new FakeToolHost();
+                tools.Queue("outlook_get_current_selection",
+                    "{\"folder\":\"Входящие\",\"count\":1,\"messages\":[{\"from\":\"Куроедов Андрей Витальевич <kuroedov.av@metallprofil.ru>\",\"direction\":\"incoming\",\"my_role\":\"recipient\",\"is_from_me\":false,\"is_to_me\":true}]}");
+
+                var result = await chat.RunTurnAsync(
+                    new ConversationContext(),
+                    "Это письмо отправил я или мне?",
+                    tools,
+                    new CapturingChatEventSink(),
+                    CancellationToken.None);
+
+                Assert.Equal(StopReason.Completed, result.StopReason);
+                Assert.Contains("Это письмо пришло вам.", result.FinalAssistantText);
+                Assert.DoesNotEqual("Это письмо отправил я или мне?", result.FinalAssistantText);
+                Assert.DoesNotContain("\"text\"", result.FinalAssistantText);
+            }
+        }
+
+        [Fact]
         public async Task RunTurnAsync_StructuredAnswerJson_UnwrapsToPlainText()
         {
             var fake = new FakeHttpMessageHandler();

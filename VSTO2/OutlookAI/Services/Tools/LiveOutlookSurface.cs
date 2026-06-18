@@ -128,8 +128,7 @@ namespace OutlookAI.Services.Tools
                 catch (COMException) { /* ignore */ }
                 catch (Exception) { /* defensive */ }
 
-                Outlook.AddressEntry sender = null;
-                try { sender = _application.Session.CurrentUser?.AddressEntry; } catch (COMException) { }
+                var currentUser = GetCurrentUserIdentity();
 
                 return new ComposeStateResult
                 {
@@ -137,8 +136,12 @@ namespace OutlookAI.Services.Tools
                     ToRecipients = SplitAddresses(item.To),
                     CcRecipients = SplitAddresses(item.CC),
                     BccRecipients = SplitAddresses(item.BCC),
-                    SenderName = sender?.Name ?? _application.Session.CurrentUser?.Name ?? "",
-                    SenderEmail = TryGetSmtp(sender) ?? "",
+                    SenderName = currentUser.DisplayName ?? "",
+                    SenderEmail = currentUser.SmtpAddress ?? "",
+                    CurrentUser = currentUser,
+                    ItemType = "mail",
+                    Direction = "outgoing",
+                    MyRole = "sender",
                     BodyPlaintext = body,
                     BodyTruncated = truncated,
                     Attachments = attachments,
@@ -271,20 +274,7 @@ namespace OutlookAI.Services.Tools
                     }
                     catch (COMException) { }
 
-                    return new MessageDetail
-                    {
-                        Id = messageId,
-                        Subject = item.Subject ?? "",
-                        From = item.SenderName ?? item.SenderEmailAddress ?? "",
-                        To = SplitAddresses(item.To),
-                        Cc = SplitAddresses(item.CC),
-                        ReceivedAt = ToOffset(item.ReceivedTime),
-                        BodyPlaintext = body,
-                        BodyTruncated = truncated,
-                        Attachments = attachments,
-                        InReplyToMessageId = null,
-                        ConversationTopic = item.ConversationTopic ?? "",
-                    };
+                    return BuildMailDetail(messageId, item, body, truncated, attachments);
                 }
                 catch (COMException) { return null; }
                 catch (KeyNotFoundException) { return null; }
@@ -414,22 +404,47 @@ namespace OutlookAI.Services.Tools
             }
             catch (COMException) { }
 
+            return BuildMailDetail(shortId, item, body, truncated, attachments);
+        }
+
+        private MessageDetail BuildMailDetail(
+            string shortId,
+            Outlook.MailItem item,
+            string body,
+            bool truncated,
+            IReadOnlyList<AttachmentSummary> attachments)
+        {
             string subject = ""; try { subject = item.Subject ?? ""; } catch (COMException) { }
-            string sender = ""; try { sender = item.SenderName ?? item.SenderEmailAddress ?? ""; } catch (COMException) { }
+            string sender = ""; try { sender = FormatSender(item); } catch (COMException) { }
             string to = ""; try { to = item.To ?? ""; } catch (COMException) { }
             string cc = ""; try { cc = item.CC ?? ""; } catch (COMException) { }
+            DateTimeOffset sentAt = DateTimeOffset.MinValue;
+            try { sentAt = ToOffset(item.SentOn); } catch (COMException) { }
             DateTimeOffset receivedAt = DateTimeOffset.MinValue;
             try { receivedAt = ToOffset(item.ReceivedTime); } catch (COMException) { }
             string conversationTopic = ""; try { conversationTopic = item.ConversationTopic ?? ""; } catch (COMException) { }
+            var toList = ReadMailRecipients(item, Outlook.OlMailRecipientType.olTo);
+            if (toList.Count == 0) toList = SplitAddresses(to);
+            var ccList = ReadMailRecipients(item, Outlook.OlMailRecipientType.olCC);
+            if (ccList.Count == 0) ccList = SplitAddresses(cc);
+            var currentUser = GetCurrentUserIdentity();
 
             return new MessageDetail
             {
                 Id = shortId,
+                ItemType = "mail",
+                Direction = OutlookContextClassifier.MailDirection(currentUser, sender, toList, ccList),
+                MyRole = OutlookContextClassifier.MailRole(currentUser, sender, toList, ccList),
+                CurrentUser = currentUser,
                 Subject = subject,
                 From = sender,
-                To = SplitAddresses(to),
-                Cc = SplitAddresses(cc),
+                To = toList,
+                Cc = ccList,
+                SentAt = sentAt,
                 ReceivedAt = receivedAt,
+                IsFromMe = OutlookContextClassifier.IdentityMatches(currentUser, sender),
+                IsToMe = toList.Any(value => OutlookContextClassifier.IdentityMatches(currentUser, value)),
+                IsCcToMe = ccList.Any(value => OutlookContextClassifier.IdentityMatches(currentUser, value)),
                 BodyPlaintext = body,
                 BodyTruncated = truncated,
                 Attachments = attachments,
@@ -1022,12 +1037,13 @@ namespace OutlookAI.Services.Tools
             {
                 if (_explorer == null)
                 {
+                    var openDetail = BuildOpenItemDetail(includeFullBodies);
                     return new CurrentSelectionResult
                     {
                         Folder = "",
                         FolderId = "",
-                        Count = 0,
-                        Messages = new MessageDetail[0],
+                        Count = openDetail == null ? 0 : 1,
+                        Messages = openDetail == null ? new MessageDetail[0] : new[] { openDetail },
                     };
                 }
 
@@ -1057,52 +1073,9 @@ namespace OutlookAI.Services.Tools
                     {
                         object item = null;
                         try { item = selection[i]; } catch (COMException) { continue; }
-                        var mi = item as Outlook.MailItem;
-                        if (mi == null) continue;
-
-                        var body = mi.Body ?? "";
-                        bool truncated = false;
-                        if (!includeFullBodies && body.Length > 1000)
-                        {
-                            body = body.Substring(0, 1000);
-                            truncated = true;
-                        }
-                        else if (body.Length > MaxBodyChars)
-                        {
-                            body = body.Substring(0, MaxBodyChars);
-                            truncated = true;
-                        }
-
-                        var atts = new List<AttachmentSummary>();
-                        try
-                        {
-                            foreach (Outlook.Attachment att in mi.Attachments)
-                            {
-                                atts.Add(new AttachmentSummary
-                                {
-                                    Filename = att.FileName,
-                                    SizeBytes = att.Size,
-                                });
-                            }
-                        }
-                        catch (COMException) { }
-
-                        picked.Add(new MessageDetail
-                        {
-                            Id = _ids.Shorten(mi.EntryID ?? ""),
-                            Subject = mi.Subject ?? "",
-                            From = (mi.SenderName ?? "") +
-                                   (string.IsNullOrEmpty(mi.SenderEmailAddress) ? "" :
-                                    " <" + mi.SenderEmailAddress + ">"),
-                            To = SplitAddresses(mi.To),
-                            Cc = SplitAddresses(mi.CC),
-                            ReceivedAt = ToOffset(mi.ReceivedTime),
-                            BodyPlaintext = body,
-                            BodyTruncated = truncated,
-                            Attachments = atts,
-                            InReplyToMessageId = null,
-                            ConversationTopic = mi.ConversationTopic ?? "",
-                        });
+                        var detail = BuildSelectionDetail(item, includeFullBodies);
+                        if (detail == null) continue;
+                        picked.Add(detail);
                         taken++;
                     }
                 }
@@ -1150,6 +1123,142 @@ namespace OutlookAI.Services.Tools
                 return inspector?.CurrentItem as Outlook.MailItem;
             }
             catch (COMException) { return null; }
+        }
+
+        private MessageDetail BuildSelectionDetail(object item, bool includeFullBodies)
+        {
+            if (item is Outlook.MailItem mail)
+            {
+                return BuildMessageDetail(_ids.Shorten(SafeMailString(() => mail.EntryID)), mail, includeFullBodies);
+            }
+            if (item is Outlook.MeetingItem meeting)
+            {
+                return BuildMeetingItemDetail(meeting, includeFullBodies);
+            }
+            if (item is Outlook.AppointmentItem appointment)
+            {
+                return BuildAppointmentDetail(appointment, includeFullBodies);
+            }
+            return null;
+        }
+
+        private MessageDetail BuildOpenItemDetail(bool includeFullBodies)
+        {
+            try
+            {
+                object item = null;
+                if (_composeInspector != null)
+                {
+                    item = _composeInspector.CurrentItem;
+                }
+                if (item == null)
+                {
+                    var inspector = _application.ActiveInspector();
+                    item = inspector?.CurrentItem;
+                }
+                return BuildSelectionDetail(item, includeFullBodies);
+            }
+            catch (COMException) { return null; }
+        }
+
+        private MessageDetail BuildMeetingItemDetail(Outlook.MeetingItem item, bool includeFullBodies)
+        {
+            var body = SafeString(() => item.Body);
+            var truncated = TruncateBody(ref body, includeFullBodies);
+            var currentUser = GetCurrentUserIdentity();
+            var organizer = FormatMeetingSender(item);
+            var required = new List<string>();
+            var optional = new List<string>();
+            DateTimeOffset? start = null;
+            DateTimeOffset? end = null;
+            string location = "";
+
+            try
+            {
+                var appointment = item.GetAssociatedAppointment(false);
+                if (appointment != null)
+                {
+                    organizer = SafeString(() => appointment.Organizer) ?? organizer;
+                    required = SplitAddresses(SafeString(() => appointment.RequiredAttendees)).ToList();
+                    optional = SplitAddresses(SafeString(() => appointment.OptionalAttendees)).ToList();
+                    start = ToOffset(SafeDateTime(() => appointment.Start));
+                    end = ToOffset(SafeDateTime(() => appointment.End));
+                    location = SafeString(() => appointment.Location);
+                }
+            }
+            catch (COMException) { }
+
+            if (required.Count == 0)
+            {
+                required.Add(FormatMeetingSender(item));
+            }
+            var direction = OutlookContextClassifier.MeetingDirection(currentUser, organizer, required, optional);
+            var role = OutlookContextClassifier.MeetingRole(currentUser, organizer, required, optional);
+            if (direction == "unknown" && !OutlookContextClassifier.IdentityMatches(currentUser, organizer))
+            {
+                direction = "incoming";
+                if (role == "unknown") role = "required_attendee";
+            }
+
+            return new MessageDetail
+            {
+                Id = _ids.Shorten(SafeString(() => item.EntryID)),
+                ItemType = "meeting",
+                Direction = direction,
+                MyRole = role,
+                CurrentUser = currentUser,
+                Subject = SafeString(() => item.Subject),
+                From = organizer,
+                To = required,
+                Cc = optional,
+                SentAt = ToOffset(SafeDateTime(() => item.SentOn)),
+                ReceivedAt = ToOffset(SafeDateTime(() => item.ReceivedTime)),
+                BodyPlaintext = body,
+                BodyTruncated = truncated,
+                Attachments = ReadAttachments(item.Attachments),
+                ConversationTopic = SafeString(() => item.ConversationTopic),
+                Organizer = organizer,
+                RequiredAttendees = required,
+                OptionalAttendees = optional,
+                Start = start,
+                End = end,
+                Location = location,
+                MeetingState = MeetingStateFromMessageClass(SafeString(() => item.MessageClass)),
+            };
+        }
+
+        private MessageDetail BuildAppointmentDetail(Outlook.AppointmentItem item, bool includeFullBodies)
+        {
+            var body = SafeString(() => item.Body);
+            var truncated = TruncateBody(ref body, includeFullBodies);
+            var currentUser = GetCurrentUserIdentity();
+            var organizer = SafeString(() => item.Organizer);
+            var required = SplitAddresses(SafeString(() => item.RequiredAttendees));
+            var optional = SplitAddresses(SafeString(() => item.OptionalAttendees));
+
+            return new MessageDetail
+            {
+                Id = _ids.Shorten(SafeString(() => item.EntryID)),
+                ItemType = "meeting",
+                Direction = OutlookContextClassifier.MeetingDirection(currentUser, organizer, required, optional),
+                MyRole = OutlookContextClassifier.MeetingRole(currentUser, organizer, required, optional),
+                CurrentUser = currentUser,
+                Subject = SafeString(() => item.Subject),
+                From = organizer,
+                To = required,
+                Cc = optional,
+                BodyPlaintext = body,
+                BodyTruncated = truncated,
+                Attachments = ReadAttachments(item.Attachments),
+                ConversationTopic = SafeString(() => item.ConversationTopic),
+                Organizer = organizer,
+                RequiredAttendees = required,
+                OptionalAttendees = optional,
+                Start = ToOffset(SafeDateTime(() => item.Start)),
+                End = ToOffset(SafeDateTime(() => item.End)),
+                Location = SafeString(() => item.Location),
+                MeetingState = "calendar_item",
+            };
         }
 
         private CreatedDraft CreatedFromMail(Outlook.MailItem item, string location, string fallbackName)
@@ -1269,10 +1378,144 @@ namespace OutlookAI.Services.Tools
             return name + " <" + email + ">";
         }
 
+        private static IReadOnlyList<string> ReadMailRecipients(Outlook.MailItem item, Outlook.OlMailRecipientType type)
+        {
+            var values = new List<string>();
+            if (item == null) return values;
+            try
+            {
+                var recipients = item.Recipients;
+                if (recipients == null) return values;
+                for (int i = 1; i <= recipients.Count; i++)
+                {
+                    Outlook.Recipient recipient = null;
+                    try
+                    {
+                        recipient = recipients[i];
+                        if (recipient == null || recipient.Type != (int)type) continue;
+                        var name = SafeMailString(() => recipient.Name);
+                        var email = TryGetSmtp(recipient.AddressEntry) ?? SafeMailString(() => recipient.Address);
+                        if (string.IsNullOrWhiteSpace(email)) email = name;
+                        if (string.IsNullOrWhiteSpace(email)) continue;
+                        values.Add(string.IsNullOrWhiteSpace(name) || string.Equals(name, email, StringComparison.OrdinalIgnoreCase)
+                            ? email
+                            : name + " <" + email + ">");
+                    }
+                    catch (COMException) { }
+                }
+            }
+            catch (COMException) { }
+            return values;
+        }
+
         private static string SafeMailString(Func<string> read)
         {
             try { return read?.Invoke() ?? ""; }
             catch (COMException) { return ""; }
+        }
+
+        private static string SafeString(Func<string> read) => SafeMailString(read);
+
+        private static DateTime SafeDateTime(Func<DateTime> read)
+        {
+            try { return read?.Invoke() ?? DateTime.MinValue; }
+            catch (COMException) { return DateTime.MinValue; }
+        }
+
+        private static bool TruncateBody(ref string body, bool includeFullBodies)
+        {
+            body = body ?? "";
+            if (!includeFullBodies && body.Length > 1000)
+            {
+                body = body.Substring(0, 1000);
+                return true;
+            }
+            if (body.Length > MaxBodyChars)
+            {
+                body = body.Substring(0, MaxBodyChars);
+                return true;
+            }
+            return false;
+        }
+
+        private static IReadOnlyList<AttachmentSummary> ReadAttachments(Outlook.Attachments attachments)
+        {
+            var list = new List<AttachmentSummary>();
+            if (attachments == null) return list;
+            try
+            {
+                for (int i = 1; i <= attachments.Count; i++)
+                {
+                    try
+                    {
+                        var a = attachments[i];
+                        list.Add(new AttachmentSummary
+                        {
+                            Filename = a.FileName,
+                            SizeBytes = a.Size
+                        });
+                    }
+                    catch (COMException) { }
+                }
+            }
+            catch (COMException) { }
+            return list;
+        }
+
+        private MailboxIdentity GetCurrentUserIdentity()
+        {
+            var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string displayName = "";
+            string smtp = "";
+
+            try
+            {
+                var user = _application.Session.CurrentUser;
+                displayName = user?.Name ?? "";
+                smtp = TryGetSmtp(user?.AddressEntry) ?? "";
+                if (!string.IsNullOrWhiteSpace(smtp)) aliases.Add(smtp.Trim());
+            }
+            catch (COMException) { }
+
+            try
+            {
+                foreach (Outlook.Account account in _application.Session.Accounts)
+                {
+                    var accountSmtp = SafeMailString(() => account.SmtpAddress);
+                    if (!string.IsNullOrWhiteSpace(accountSmtp))
+                    {
+                        aliases.Add(accountSmtp.Trim());
+                        if (string.IsNullOrWhiteSpace(smtp)) smtp = accountSmtp.Trim();
+                    }
+                }
+            }
+            catch (COMException) { }
+
+            return new MailboxIdentity
+            {
+                DisplayName = displayName,
+                SmtpAddress = smtp,
+                Aliases = aliases.ToArray()
+            };
+        }
+
+        private static string FormatMeetingSender(Outlook.MeetingItem item)
+        {
+            if (item == null) return "";
+            var name = SafeMailString(() => item.SenderName);
+            var email = SafeMailString(() => item.SenderEmailAddress);
+            if (string.IsNullOrWhiteSpace(email)) return name;
+            if (string.IsNullOrWhiteSpace(name)) return email;
+            return name + " <" + email + ">";
+        }
+
+        private static string MeetingStateFromMessageClass(string messageClass)
+        {
+            var value = (messageClass ?? "").ToLowerInvariant();
+            if (value.Contains("canceled") || value.Contains("cancelled") || value.Contains("cancel")) return "cancel";
+            if (value.Contains("update")) return "update";
+            if (value.Contains("request")) return "request";
+            return "request";
         }
 
         private static DateTime GetOriginalDate(Outlook.MailItem item)

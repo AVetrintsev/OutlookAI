@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using OutlookAI.Services.Export;
 
@@ -31,9 +32,9 @@ namespace OutlookAI.Services.Tools
         void FlagMessage(string messageId, string flag);
         void SetCategory(string messageId, string category);
         /// <summary>
-        /// Returns the messages currently selected in the active Explorer.
-        /// Returns empty (Count=0, Messages=empty) when the surface was
-        /// constructed without an Explorer reference (compose-only panes).
+        /// Returns items currently selected in the active Explorer, or the
+        /// current Inspector item when the surface was constructed without an
+        /// Explorer reference.
         /// </summary>
         CurrentSelectionResult GetCurrentSelection(bool includeFullBodies, int maxItems);
     }
@@ -46,6 +47,10 @@ namespace OutlookAI.Services.Tools
         public IReadOnlyList<string> BccRecipients { get; set; }
         public string SenderName { get; set; }
         public string SenderEmail { get; set; }
+        public MailboxIdentity CurrentUser { get; set; }
+        public string ItemType { get; set; }
+        public string Direction { get; set; }
+        public string MyRole { get; set; }
         public string BodyPlaintext { get; set; }
         public bool BodyTruncated { get; set; }
         public InReplyTo InReplyTo { get; set; }
@@ -132,16 +137,102 @@ namespace OutlookAI.Services.Tools
     public sealed class MessageDetail
     {
         public string Id { get; set; }
+        public string ItemType { get; set; }
+        public string Direction { get; set; }
+        public string MyRole { get; set; }
+        public MailboxIdentity CurrentUser { get; set; }
         public string Subject { get; set; }
         public string From { get; set; }
         public IReadOnlyList<string> To { get; set; }
         public IReadOnlyList<string> Cc { get; set; }
+        public DateTimeOffset SentAt { get; set; }
         public DateTimeOffset ReceivedAt { get; set; }
+        public bool IsFromMe { get; set; }
+        public bool IsToMe { get; set; }
+        public bool IsCcToMe { get; set; }
         public string BodyPlaintext { get; set; }
         public bool BodyTruncated { get; set; }
         public IReadOnlyList<AttachmentSummary> Attachments { get; set; }
         public string InReplyToMessageId { get; set; }
         public string ConversationTopic { get; set; }
+        public string Organizer { get; set; }
+        public IReadOnlyList<string> RequiredAttendees { get; set; }
+        public IReadOnlyList<string> OptionalAttendees { get; set; }
+        public DateTimeOffset? Start { get; set; }
+        public DateTimeOffset? End { get; set; }
+        public string Location { get; set; }
+        public string MeetingState { get; set; }
+    }
+
+    public sealed class MailboxIdentity
+    {
+        public string DisplayName { get; set; }
+        public string SmtpAddress { get; set; }
+        public IReadOnlyList<string> Aliases { get; set; }
+    }
+
+    public static class OutlookContextClassifier
+    {
+        public static bool IdentityMatches(MailboxIdentity identity, string value)
+        {
+            var email = ExtractEmail(value);
+            if (string.IsNullOrWhiteSpace(email) || identity == null) return false;
+            if (EqualsEmail(identity.SmtpAddress, email)) return true;
+            return (identity.Aliases ?? new string[0]).Any(alias => EqualsEmail(alias, email));
+        }
+
+        public static string MailDirection(MailboxIdentity identity, string from, IEnumerable<string> to, IEnumerable<string> cc)
+        {
+            if (IdentityMatches(identity, from)) return "outgoing";
+            if ((to ?? new string[0]).Any(value => IdentityMatches(identity, value))
+                || (cc ?? new string[0]).Any(value => IdentityMatches(identity, value)))
+            {
+                return "incoming";
+            }
+            return "unknown";
+        }
+
+        public static string MailRole(MailboxIdentity identity, string from, IEnumerable<string> to, IEnumerable<string> cc)
+        {
+            if (IdentityMatches(identity, from)) return "sender";
+            if ((to ?? new string[0]).Any(value => IdentityMatches(identity, value))) return "recipient";
+            if ((cc ?? new string[0]).Any(value => IdentityMatches(identity, value))) return "cc_recipient";
+            return "unknown";
+        }
+
+        public static string MeetingDirection(MailboxIdentity identity, string organizer, IEnumerable<string> required, IEnumerable<string> optional)
+        {
+            if (IdentityMatches(identity, organizer)) return "outgoing";
+            if ((required ?? new string[0]).Any(value => IdentityMatches(identity, value))
+                || (optional ?? new string[0]).Any(value => IdentityMatches(identity, value)))
+            {
+                return "incoming";
+            }
+            return "unknown";
+        }
+
+        public static string MeetingRole(MailboxIdentity identity, string organizer, IEnumerable<string> required, IEnumerable<string> optional)
+        {
+            if (IdentityMatches(identity, organizer)) return "organizer";
+            if ((required ?? new string[0]).Any(value => IdentityMatches(identity, value))) return "required_attendee";
+            if ((optional ?? new string[0]).Any(value => IdentityMatches(identity, value))) return "optional_attendee";
+            return "unknown";
+        }
+
+        public static string ExtractEmail(string value)
+        {
+            value = (value ?? "").Trim();
+            if (value.Length == 0) return "";
+            var lt = value.LastIndexOf('<');
+            var gt = value.LastIndexOf('>');
+            if (lt >= 0 && gt > lt) value = value.Substring(lt + 1, gt - lt - 1).Trim();
+            return value.Trim('"').Trim();
+        }
+
+        private static bool EqualsEmail(string left, string right)
+        {
+            return string.Equals(ExtractEmail(left), ExtractEmail(right), StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     public sealed class ThreadSummary

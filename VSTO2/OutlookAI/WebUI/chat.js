@@ -74,6 +74,8 @@
   var $customActionFullBodiesField = document.getElementById('customActionFullBodiesField');
   var $customActionAttachments = document.getElementById('customActionAttachments');
   var $customActionAttachmentsField = document.getElementById('customActionAttachmentsField');
+  var $customActionApplicabilityItemType = document.getElementById('customActionApplicabilityItemType');
+  var $customActionApplicabilityDirection = document.getElementById('customActionApplicabilityDirection');
   var $customActionOutput = document.getElementById('customActionOutput');
   var $customActionToolsField = document.getElementById('customActionToolsField');
   var $customActionTools = document.getElementById('customActionTools');
@@ -596,6 +598,12 @@
     var output = action && action.output || 'chat';
     if (output === 'create_draft') output = 'create_reply';
     $customActionOutput.value = output;
+    if ($customActionApplicabilityItemType) {
+      $customActionApplicabilityItemType.value = action && action.applicability_item_type || 'all';
+    }
+    if ($customActionApplicabilityDirection) {
+      $customActionApplicabilityDirection.value = action && action.applicability_direction || 'all';
+    }
     renderCustomActionTools(action && action.allowed_tools || []);
     updateCustomActionFieldVisibility();
     $customActionDialog.hidden = false;
@@ -717,6 +725,8 @@
         include_full_bodies: !!($customActionFullBodies && $customActionFullBodies.checked),
         include_attachments: includeAttachments,
         output: $customActionOutput ? $customActionOutput.value : 'chat',
+        applicability_item_type: $customActionApplicabilityItemType ? $customActionApplicabilityItemType.value : 'all',
+        applicability_direction: $customActionApplicabilityDirection ? $customActionApplicabilityDirection.value : 'all',
         allow_tools: allowedTools.length > 0,
         allowed_tools: allowedTools
       }

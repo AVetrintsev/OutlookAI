@@ -86,6 +86,15 @@ namespace OutlookAI.Tests.Services.Tools
             var msg = new MessageDetail
             {
                 Id = "msg_abc",
+                ItemType = "meeting",
+                Direction = "incoming",
+                MyRole = "required_attendee",
+                CurrentUser = new MailboxIdentity
+                {
+                    DisplayName = "Me",
+                    SmtpAddress = "me@example.com",
+                    Aliases = new[] { "alias@example.com" }
+                },
                 Subject = "Re: Q4 plan",
                 From = "Jane Doe <jane@acme.com>",
                 ReceivedAt = new DateTimeOffset(2026, 5, 17, 9, 14, 0, TimeSpan.Zero),
@@ -93,6 +102,9 @@ namespace OutlookAI.Tests.Services.Tools
                 BodyTruncated = false,
                 Attachments = new[] { new AttachmentSummary { Filename = "plan.xlsx", SizeBytes = 4096 } },
                 ConversationTopic = "Q4 plan",
+                Organizer = "Jane Doe <jane@acme.com>",
+                RequiredAttendees = new[] { "Me <me@example.com>" },
+                MeetingState = "request",
             };
             var surface = new Surface
             {
@@ -116,8 +128,13 @@ namespace OutlookAI.Tests.Services.Tools
             Assert.Single(arr);
             var m = (JObject)arr[0];
             Assert.Equal("msg_abc", (string)m["id"]);
+            Assert.Equal("meeting", (string)m["item_type"]);
+            Assert.Equal("incoming", (string)m["direction"]);
+            Assert.Equal("required_attendee", (string)m["my_role"]);
+            Assert.Equal("me@example.com", (string)m["current_user"]["smtp_address"]);
             Assert.Equal("Re: Q4 plan", (string)m["subject"]);
             Assert.Equal("Jane Doe <jane@acme.com>", (string)m["from"]);
+            Assert.Equal("request", (string)m["meeting_state"]);
             Assert.Equal("Q4 plan", (string)m["conversation_topic"]);
             Assert.True((bool)m["has_attachments"]);
             // Default include_full_bodies=false -> snippet present, no body.

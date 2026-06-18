@@ -35,19 +35,9 @@ namespace OutlookAI.Services.Tools
             {
                 foreach (var m in r.Messages)
                 {
-                    var item = new JObject(
-                        new JProperty("id", m.Id ?? ""),
-                        new JProperty("subject", m.Subject ?? ""),
-                        new JProperty("from", m.From ?? ""),
-                        new JProperty("received_at", m.ReceivedAt.ToString("o")),
-                        new JProperty("conversation_topic", m.ConversationTopic ?? ""),
-                        new JProperty("has_attachments", m.Attachments != null && m.Attachments.Count > 0));
-                    if (includeBodies)
-                    {
-                        item.Add("body_plaintext", m.BodyPlaintext ?? "");
-                        item.Add("body_truncated", m.BodyTruncated);
-                    }
-                    else
+                    var item = OutlookJsonProjection.MessageDetail(m, includeBodies);
+                    item["has_attachments"] = m.Attachments != null && m.Attachments.Count > 0;
+                    if (!includeBodies)
                     {
                         var snippet = m.BodyPlaintext ?? "";
                         if (snippet.Length > 200) snippet = snippet.Substring(0, 200);

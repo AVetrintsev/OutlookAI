@@ -44,6 +44,8 @@ namespace OutlookAI.Services.CustomActions
         public bool AllowTools { get; set; }
         public string[] AllowedTools { get; set; }
         public bool Disabled { get; set; }
+        public string ApplicabilityItemType { get; set; }
+        public string ApplicabilityDirection { get; set; }
 
         public CustomActionDefinition Clone()
         {
@@ -57,7 +59,9 @@ namespace OutlookAI.Services.CustomActions
                 Output = Output,
                 AllowTools = AllowTools,
                 AllowedTools = (AllowedTools ?? new string[0]).ToArray(),
-                Disabled = Disabled
+                Disabled = Disabled,
+                ApplicabilityItemType = ApplicabilityItemType,
+                ApplicabilityDirection = ApplicabilityDirection
             };
         }
     }
@@ -89,5 +93,82 @@ namespace OutlookAI.Services.CustomActions
         public string DraftId { get; set; }
         public string DraftLocation { get; set; }
         public string DraftDisplayName { get; set; }
+    }
+
+    public sealed class CustomActionApplicabilityContext
+    {
+        public string ItemType { get; set; }
+        public string Direction { get; set; }
+    }
+
+    public static class CustomActionApplicability
+    {
+        public const string All = "all";
+        public const string Mail = "mail";
+        public const string Meeting = "meeting";
+        public const string Incoming = "incoming";
+        public const string Outgoing = "outgoing";
+        public const string Unknown = "unknown";
+
+        public static bool IsApplicable(CustomActionDefinition action, CustomActionApplicabilityContext context)
+        {
+            if (action == null || action.Disabled) return false;
+            var actionItemType = NormalizeApplicability(action.ApplicabilityItemType, All, Mail, Meeting);
+            var actionDirection = NormalizeApplicability(action.ApplicabilityDirection, All, Incoming, Outgoing);
+            var itemType = NormalizeContext(context?.ItemType);
+            var direction = NormalizeContext(context?.Direction);
+            return Matches(actionItemType, itemType) && Matches(actionDirection, direction);
+        }
+
+        public static CustomActionFile FilterCatalog(CustomActionFile catalog, CustomActionApplicabilityContext context)
+        {
+            return new CustomActionFile
+            {
+                SchemaVersion = catalog?.SchemaVersion ?? CustomActionStore.CurrentSchemaVersion,
+                Groups = (catalog?.Groups ?? new CustomActionGroup[0])
+                    .Select(group =>
+                    {
+                        var copy = group.Clone();
+                        copy.Actions = (copy.Actions ?? new CustomActionDefinition[0])
+                            .Where(action => IsApplicable(action, context))
+                            .ToArray();
+                        return copy;
+                    })
+                    .Where(group => group.Actions.Length > 0)
+                    .ToArray()
+            };
+        }
+
+        public static string NormalizeItemType(string value)
+        {
+            return NormalizeApplicability(value, All, Mail, Meeting);
+        }
+
+        public static string NormalizeDirection(string value)
+        {
+            return NormalizeApplicability(value, All, Incoming, Outgoing);
+        }
+
+        private static bool Matches(string actionValue, string contextValue)
+        {
+            if (actionValue == All) return true;
+            if (contextValue == Unknown) return false;
+            return string.Equals(actionValue, contextValue, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeContext(string value)
+        {
+            value = (value ?? "").Trim().ToLowerInvariant();
+            return string.IsNullOrWhiteSpace(value) ? Unknown : value;
+        }
+
+        private static string NormalizeApplicability(string value, string fallback, params string[] allowed)
+        {
+            value = (value ?? "").Trim().ToLowerInvariant();
+            if (value == All) return All;
+            return allowed.Any(item => string.Equals(item, value, StringComparison.OrdinalIgnoreCase))
+                ? value
+                : fallback;
+        }
     }
 }

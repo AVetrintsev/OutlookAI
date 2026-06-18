@@ -265,7 +265,8 @@ namespace OutlookAI.TaskPane.Chat
                 var payload = CustomActionUiSerializer.Build(
                     _customActionStore.LoadCatalog(),
                     recommendationIds,
-                    ToolManifestCatalog.Default.BuildUiToolsArray());
+                    ToolManifestCatalog.Default.BuildUiToolsArray(),
+                    GetApplicabilityContext());
                 _ = RunScript("outlookai.setActionCatalog(" +
                     payload.ToString(Newtonsoft.Json.Formatting.None) + ");");
             }
@@ -338,7 +339,10 @@ namespace OutlookAI.TaskPane.Chat
             await PushRecommendationStateAsync("loading");
             try
             {
-                var groups = _customActionStore.LoadCatalog().Groups;
+                var catalog = CustomActionApplicability.FilterCatalog(
+                    _customActionStore.LoadCatalog(),
+                    GetApplicabilityContext(selection));
+                var groups = catalog.Groups;
                 var ids = await _recommendationService.RecommendAsync(selection, groups, token)
                     .ConfigureAwait(false);
                 if (token.IsCancellationRequested) return;
@@ -361,6 +365,41 @@ namespace OutlookAI.TaskPane.Chat
             return RunScript("outlookai.setActionRecommendationState(" +
                 JsString(state) + ", " +
                 new JArray(ids ?? new string[0]).ToString(Newtonsoft.Json.Formatting.None) + ");");
+        }
+
+        private CustomActionApplicabilityContext GetApplicabilityContext(CurrentSelectionResult selection = null)
+        {
+            try
+            {
+                selection = selection ?? _surface?.GetCurrentSelection(includeFullBodies: false, maxItems: 1);
+                var first = selection?.Messages?.FirstOrDefault();
+                if (first != null)
+                {
+                    return new CustomActionApplicabilityContext
+                    {
+                        ItemType = first.ItemType,
+                        Direction = first.Direction
+                    };
+                }
+
+                var compose = _surface?.GetCurrentComposeState(includeFullBody: false);
+                if (compose != null
+                    && (!string.IsNullOrWhiteSpace(compose.Subject)
+                        || !string.IsNullOrWhiteSpace(compose.BodyPlaintext)
+                        || (compose.ToRecipients != null && compose.ToRecipients.Any())))
+                {
+                    return new CustomActionApplicabilityContext
+                    {
+                        ItemType = compose.ItemType,
+                        Direction = compose.Direction
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                TraceLog.Write("GetApplicabilityContext error: " + ex.Message, "ChatController");
+            }
+            return new CustomActionApplicabilityContext();
         }
 
         /// <summary>
@@ -488,6 +527,10 @@ namespace OutlookAI.TaskPane.Chat
                     sb.AppendLine();
                     sb.AppendLine("---");
                     sb.AppendLine("Current compose state (read-only context):");
+                    sb.AppendLine("Current user: " + FormatMailboxIdentity(state.CurrentUser));
+                    sb.AppendLine("Item type: " + (state.ItemType ?? "mail"));
+                    sb.AppendLine("Direction: " + (state.Direction ?? "unknown"));
+                    sb.AppendLine("My role: " + (state.MyRole ?? "unknown"));
                     if (!string.IsNullOrEmpty(state.Subject))
                     {
                         sb.AppendLine("Subject: " + state.Subject);
@@ -520,6 +563,16 @@ namespace OutlookAI.TaskPane.Chat
             return prompt;
         }
 
+        private static string FormatMailboxIdentity(MailboxIdentity identity)
+        {
+            if (identity == null) return "";
+            if (!string.IsNullOrWhiteSpace(identity.DisplayName) && !string.IsNullOrWhiteSpace(identity.SmtpAddress))
+            {
+                return identity.DisplayName + " <" + identity.SmtpAddress + ">";
+            }
+            return identity.SmtpAddress ?? identity.DisplayName ?? "";
+        }
+
         private async Task StartCustomActionAsync(string actionId)
         {
             TraceLog.Write(">> StartCustomActionAsync id=" + actionId, "ChatController");
@@ -534,6 +587,11 @@ namespace OutlookAI.TaskPane.Chat
             if (action == null)
             {
                 await RunScript("outlookai.showError(" + JsString("Пользовательское действие не найдено.") + ");");
+                return;
+            }
+            if (!CustomActionApplicability.IsApplicable(action, GetApplicabilityContext()))
+            {
+                await RunScript("outlookai.showError(" + JsString("Действие недоступно для текущего письма или встречи.") + ");");
                 return;
             }
 
@@ -661,7 +719,11 @@ namespace OutlookAI.TaskPane.Chat
                     },
                     Output = (string)payload["output"] ?? "chat",
                     AllowTools = allowedTools.Length > 0,
-                    AllowedTools = allowedTools
+                    AllowedTools = allowedTools,
+                    ApplicabilityItemType = CustomActionApplicability.NormalizeItemType(
+                        (string)payload["applicability_item_type"]),
+                    ApplicabilityDirection = CustomActionApplicability.NormalizeDirection(
+                        (string)payload["applicability_direction"])
                 };
 
                 _customActionStore.Upsert((string)payload["group_id"], action);

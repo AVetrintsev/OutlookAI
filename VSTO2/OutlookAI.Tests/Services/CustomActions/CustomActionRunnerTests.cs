@@ -79,11 +79,42 @@ namespace OutlookAI.Tests.Services.CustomActions
         }
 
         [Fact]
+        public async Task RunAsync_NotApplicableAction_ReturnsErrorBeforeCreatingDraft()
+        {
+            var surface = new RunnerSurface
+            {
+                SelectionItemType = "mail",
+                SelectionDirection = "incoming"
+            };
+            var action = Action("create_meeting");
+            action.ApplicabilityItemType = "meeting";
+            action.ApplicabilityDirection = "outgoing";
+
+            var result = await RunAsync(surface, action);
+
+            Assert.Contains("недоступно", result.Text);
+            Assert.Null(surface.MeetingArgs);
+        }
+
+        [Fact]
         public void CustomActionUiSerializer_ShowsCreateDraftAliasAsCreateReply()
         {
             var json = CustomActionUiSerializer.ToJson(Action("create_draft"));
 
             Assert.Equal("create_reply", (string)json["output"]);
+        }
+
+        [Fact]
+        public void CustomActionUiSerializer_ProjectsApplicabilityFields()
+        {
+            var action = Action("chat");
+            action.ApplicabilityItemType = "meeting";
+            action.ApplicabilityDirection = "outgoing";
+
+            var json = CustomActionUiSerializer.ToJson(action);
+
+            Assert.Equal("meeting", (string)json["applicability_item_type"]);
+            Assert.Equal("outgoing", (string)json["applicability_direction"]);
         }
 
         private static async Task<CustomActionRunResult> RunAsync(
@@ -128,6 +159,8 @@ namespace OutlookAI.Tests.Services.CustomActions
         private sealed class RunnerSurface : MinimalSurface
         {
             public string SelectionMessageId { get; set; } = "m1";
+            public string SelectionItemType { get; set; } = "mail";
+            public string SelectionDirection { get; set; } = "incoming";
             public CreateReplyDraftArgs ReplyArgs { get; private set; }
             public CreateMeetingDraftArgs MeetingArgs { get; private set; }
 
@@ -143,6 +176,8 @@ namespace OutlookAI.Tests.Services.CustomActions
                             new MessageDetail
                             {
                                 Id = SelectionMessageId,
+                                ItemType = SelectionItemType,
+                                Direction = SelectionDirection,
                                 Subject = "Subject",
                                 From = "sender@example.com",
                                 To = new[] { "user@example.com" },

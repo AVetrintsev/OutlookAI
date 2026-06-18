@@ -33,9 +33,33 @@ namespace OutlookAI.TaskPane.InboxCopilot
                 {
                     var m = selection.Messages[0];
                     sb.Append("- Selected: ").AppendLine(m.Subject ?? "");
+                    sb.Append("  Current user: ").AppendLine(FormatIdentity(m.CurrentUser));
+                    sb.Append("  Item type: ").AppendLine(m.ItemType ?? "mail");
+                    sb.Append("  Direction: ").AppendLine(m.Direction ?? "unknown");
+                    sb.Append("  My role: ").AppendLine(m.MyRole ?? "unknown");
                     if (!string.IsNullOrEmpty(m.From))
                     {
                         sb.Append("  From: ").AppendLine(m.From);
+                    }
+                    if (m.To != null && m.To.Count > 0)
+                    {
+                        sb.Append("  To: ").AppendLine(string.Join(", ", m.To));
+                    }
+                    if (m.Cc != null && m.Cc.Count > 0)
+                    {
+                        sb.Append("  Cc: ").AppendLine(string.Join(", ", m.Cc));
+                    }
+                    if (!string.IsNullOrWhiteSpace(m.Organizer))
+                    {
+                        sb.Append("  Organizer: ").AppendLine(m.Organizer);
+                    }
+                    if (m.RequiredAttendees != null && m.RequiredAttendees.Count > 0)
+                    {
+                        sb.Append("  Required attendees: ").AppendLine(string.Join(", ", m.RequiredAttendees));
+                    }
+                    if (!string.IsNullOrWhiteSpace(m.MeetingState))
+                    {
+                        sb.Append("  Meeting state: ").AppendLine(m.MeetingState);
                     }
                     sb.Append("  Received: ").AppendLine(m.ReceivedAt.ToString("o"));
                     var snippet = (m.BodyPlaintext ?? "").Replace("\r", " ").Replace("\n", " ");
@@ -77,6 +101,16 @@ namespace OutlookAI.TaskPane.InboxCopilot
             sb.AppendLine();
             sb.AppendLine("Reply concisely; the user is busy.");
             return sb.ToString();
+        }
+
+        private static string FormatIdentity(MailboxIdentity identity)
+        {
+            if (identity == null) return "";
+            if (!string.IsNullOrWhiteSpace(identity.DisplayName) && !string.IsNullOrWhiteSpace(identity.SmtpAddress))
+            {
+                return identity.DisplayName + " <" + identity.SmtpAddress + ">";
+            }
+            return identity.SmtpAddress ?? identity.DisplayName ?? "";
         }
     }
 }

@@ -1,9 +1,9 @@
-﻿{
+{
   "tools": [
     {
       "type": "function",
       "name": "outlook_get_current_compose_state",
-      "description": "Read the current compose-window state (subject, recipients, body, thread, attachments). Set include_full_body=true for the full body instead of a 1000-char summary.",
+      "description": "Read the current compose-window state (subject, recipients, body, thread, attachments, current_user, item_type, direction, my_role). Set include_full_body=true for the full body instead of a 1000-char summary.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -132,7 +132,7 @@
     {
       "type": "function",
       "name": "outlook_read_message",
-      "description": "Fetch one message by id. Body always plaintext; truncated at 32 KB.",
+      "description": "Fetch one message by id. Body always plaintext; truncated at 32 KB. Response includes current_user, item_type, direction, my_role, mail role flags (is_from_me/is_to_me/is_cc_to_me), and meeting fields when applicable.",
       "parameters": {
         "type": "object",
         "required": [
@@ -238,7 +238,7 @@
     {
       "type": "function",
       "name": "outlook_read_messages",
-      "description": "Bulk-read message details by short ID array. Returns subject/sender/date/body/attachments per id. Use this instead of multiple outlook_read_message calls; 5-10x faster when you have many IDs from a prior outlook_search_messages and you need bodies (action items, topic-status, conversation summary reports). Avoid calling on more than ~25 IDs when each body is long. For large result sets you intend to export, work from search metadata + snippet instead of bulk-reading bodies.",
+      "description": "Bulk-read message details by short ID array. Returns subject/sender/date/body/attachments per id. Response includes current_user, item_type, direction, my_role, mail role flags (is_from_me/is_to_me/is_cc_to_me), and meeting fields when applicable. Use this instead of multiple outlook_read_message calls; 5-10x faster when you have many IDs from a prior outlook_search_messages and you need bodies (action items, topic-status, conversation summary reports). Avoid calling on more than ~25 IDs when each body is long. For large result sets you intend to export, work from search metadata + snippet instead of bulk-reading bodies.",
       "parameters": {
         "type": "object",
         "required": [
@@ -498,7 +498,7 @@
     {
       "type": "function",
       "name": "outlook_get_current_selection",
-      "description": "Read the messages currently selected in the user's active Explorer (e.g. messages they highlighted in the reading pane). Useful for 'reply to this', 'summarize this thread', etc. Returns empty when nothing is selected or when there is no active Explorer (e.g. the chat is anchored to a compose window).",
+      "description": "Read the items currently selected in the user's active Explorer (mail messages, meeting requests/updates/cancellations, or calendar appointments). Useful for reply/summarize/meeting context. Returns current_user, item_type, direction, my_role and meeting fields when applicable. Returns empty when nothing is selected or when there is no active Explorer.",
       "parameters": {
         "type": "object",
         "properties": {

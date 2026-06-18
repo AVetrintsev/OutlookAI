@@ -103,6 +103,7 @@ namespace OutlookAI.Services
                         body,
                         assistantText,
                         sink,
+                        userMessage,
                         cancellationToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
@@ -176,6 +177,7 @@ namespace OutlookAI.Services
             JObject body,
             StringBuilder assistantText,
             ChatEventSink sink,
+            string fallbackUserMessage,
             CancellationToken cancellationToken)
         {
             var requestId = LlmDebugLogger.NewRequestId();
@@ -222,7 +224,14 @@ namespace OutlookAI.Services
 
                         using (var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
                         {
-                            return await ReadChatCompletionsSseAsync(stream, assistantText, sink, cancellationToken, requestId)
+                            return await ReadChatCompletionsSseAsync(
+                                    stream,
+                                    assistantText,
+                                    sink,
+                                    cancellationToken,
+                                    requestId,
+                                    fallbackUserMessage,
+                                    body)
                                 .ConfigureAwait(false);
                         }
                     }
@@ -245,7 +254,9 @@ namespace OutlookAI.Services
             StringBuilder assistantText,
             ChatEventSink sink,
             CancellationToken cancellationToken,
-            string requestId = null)
+            string requestId = null,
+            string fallbackUserMessage = null,
+            JObject requestBody = null)
         {
             var callsByIndex = new Dictionary<int, JObject>();
             var bufferedText = new StringBuilder();
@@ -364,19 +375,35 @@ namespace OutlookAI.Services
                 bufferedText.Clear();
                 calls = textCalls;
             }
-            else if (calls.Count == 0 && TryUnwrapStructuredAssistantText(assistantText.ToString(), out var unwrappedText))
+            else if (calls.Count == 0 && TryUnwrapStructuredAssistantText(
+                assistantText.ToString(),
+                fallbackUserMessage,
+                out var unwrappedText))
             {
                 assistantText.Clear();
                 assistantText.Append(unwrappedText);
                 bufferedText.Clear();
                 sink.OnTokenDelta(unwrappedText);
             }
-            else if (calls.Count == 0 && TryBuildFallbackFromRawToolJson(assistantText.ToString(), out var fallbackText))
+            else if (calls.Count == 0 && TryBuildFallbackFromRawToolJson(
+                assistantText.ToString(),
+                fallbackUserMessage,
+                out var fallbackText))
             {
                 assistantText.Clear();
                 assistantText.Append(fallbackText);
                 bufferedText.Clear();
                 sink.OnTokenDelta(fallbackText);
+            }
+            else if (calls.Count == 0 && TryBuildFallbackFromRequestToolOutputs(
+                requestBody,
+                fallbackUserMessage,
+                out var toolOutputFallbackText))
+            {
+                assistantText.Clear();
+                assistantText.Append(toolOutputFallbackText);
+                bufferedText.Clear();
+                sink.OnTokenDelta(toolOutputFallbackText);
             }
             else if (bufferedText.Length > 0)
             {
@@ -468,6 +495,14 @@ namespace OutlookAI.Services
 
         internal static bool TryUnwrapStructuredAssistantText(string text, out string unwrappedText)
         {
+            return TryUnwrapStructuredAssistantText(text, null, out unwrappedText);
+        }
+
+        internal static bool TryUnwrapStructuredAssistantText(
+            string text,
+            string userMessage,
+            out string unwrappedText)
+        {
             unwrappedText = "";
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -492,7 +527,7 @@ namespace OutlookAI.Services
                     if (!string.IsNullOrWhiteSpace(knownText))
                     {
                         unwrappedText = knownText.Trim();
-                        return true;
+                        return !IsEchoOfUserMessage(unwrappedText, userMessage);
                     }
 
                     var stringProperties = obj.Properties()
@@ -505,12 +540,12 @@ namespace OutlookAI.Services
                         if (!string.IsNullOrWhiteSpace(value))
                         {
                             unwrappedText = value;
-                            return true;
+                            return !IsEchoOfUserMessage(unwrappedText, userMessage);
                         }
                         if (!string.IsNullOrWhiteSpace(key))
                         {
                             unwrappedText = key;
-                            return true;
+                            return !IsEchoOfUserMessage(unwrappedText, userMessage);
                         }
                     }
 
@@ -524,7 +559,7 @@ namespace OutlookAI.Services
                         if (values.Count == 1)
                         {
                             unwrappedText = values[0];
-                            return true;
+                            return !IsEchoOfUserMessage(unwrappedText, userMessage);
                         }
                     }
                 }
@@ -537,7 +572,45 @@ namespace OutlookAI.Services
             return false;
         }
 
+        private static bool IsEchoOfUserMessage(string assistantText, string userMessage)
+        {
+            var a = NormalizeForEchoComparison(assistantText);
+            var u = NormalizeForEchoComparison(userMessage);
+            return a.Length > 0 && string.Equals(a, u, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeForEchoComparison(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return "";
+            }
+
+            var normalized = text.Trim();
+            while (normalized.Length > 0
+                && (normalized[normalized.Length - 1] == '.'
+                    || normalized[normalized.Length - 1] == '!'
+                    || normalized[normalized.Length - 1] == '?'
+                    || normalized[normalized.Length - 1] == '؟'))
+            {
+                normalized = normalized.Substring(0, normalized.Length - 1).TrimEnd();
+            }
+            while (normalized.Contains("  "))
+            {
+                normalized = normalized.Replace("  ", " ");
+            }
+            return normalized;
+        }
+
         internal static bool TryBuildFallbackFromRawToolJson(string text, out string fallbackText)
+        {
+            return TryBuildFallbackFromRawToolJson(text, null, out fallbackText);
+        }
+
+        internal static bool TryBuildFallbackFromRawToolJson(
+            string text,
+            string userMessage,
+            out string fallbackText)
         {
             fallbackText = "";
             if (string.IsNullOrWhiteSpace(text))
@@ -550,6 +623,10 @@ namespace OutlookAI.Services
                 try
                 {
                     var token = JToken.Parse(candidate);
+                    if (TryAnswerMessageDirectionQuestion(userMessage, token, out fallbackText))
+                    {
+                        return true;
+                    }
                     if (TrySummarizeOutlookToolResult(token, out fallbackText))
                     {
                         return true;
@@ -562,6 +639,168 @@ namespace OutlookAI.Services
             }
 
             return false;
+        }
+
+        private static bool TryBuildFallbackFromRequestToolOutputs(
+            JObject requestBody,
+            string userMessage,
+            out string fallbackText)
+        {
+            fallbackText = "";
+            if (requestBody == null || !LooksLikeMessageDirectionQuestion(userMessage))
+            {
+                return false;
+            }
+
+            var messages = requestBody["messages"] as JArray;
+            if (messages == null)
+            {
+                return false;
+            }
+
+            foreach (var message in messages.OfType<JObject>().Reverse())
+            {
+                if (!string.Equals((string)message["role"], "tool", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var content = (string)message["content"];
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var token = JToken.Parse(content);
+                    if (TryAnswerMessageDirectionQuestion(userMessage, token, out fallbackText))
+                    {
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // Keep scanning older tool outputs.
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryAnswerMessageDirectionQuestion(
+            string userMessage,
+            JToken token,
+            out string answer)
+        {
+            answer = "";
+            if (!LooksLikeMessageDirectionQuestion(userMessage))
+            {
+                return false;
+            }
+
+            var message = FirstMessageObject(token);
+            if (message == null)
+            {
+                return false;
+            }
+
+            var from = CleanInline((string)message["from"]);
+            var toValues = message["to"] as JArray;
+            var to = toValues == null
+                ? CleanInline((string)message["to"])
+                : string.Join(", ", toValues.Values<string>().Where(x => !string.IsNullOrWhiteSpace(x)));
+
+            var isFromMe = (bool?)message["is_from_me"];
+            var isToMe = (bool?)message["is_to_me"];
+            var isCcToMe = (bool?)message["is_cc_to_me"];
+            var direction = ((string)message["direction"] ?? "").Trim().ToLowerInvariant();
+            var myRole = ((string)message["my_role"] ?? "").Trim().ToLowerInvariant();
+
+            if (isFromMe == true || direction == "outgoing" || myRole == "sender")
+            {
+                answer = "Это письмо отправили вы.";
+                if (!string.IsNullOrWhiteSpace(to))
+                {
+                    answer += " Получатель: " + to + ".";
+                }
+                return true;
+            }
+
+            if (isCcToMe == true || myRole == "cc")
+            {
+                answer = "Это письмо пришло вам в копию.";
+                if (!string.IsNullOrWhiteSpace(from))
+                {
+                    answer += " Отправитель: " + from + ".";
+                }
+                return true;
+            }
+
+            if (isToMe == true || direction == "incoming" || myRole == "recipient")
+            {
+                answer = "Это письмо пришло вам.";
+                if (!string.IsNullOrWhiteSpace(from))
+                {
+                    answer += " Отправитель: " + from + ".";
+                }
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool LooksLikeMessageDirectionQuestion(string userMessage)
+        {
+            var text = (userMessage ?? "").Trim().ToLowerInvariant();
+            if (text.Length == 0)
+            {
+                return false;
+            }
+
+            var asksAboutMe = text.Contains("я")
+                || text.Contains("мне")
+                || text.Contains("меня")
+                || text.Contains("вы")
+                || text.Contains("me")
+                || text.Contains("my");
+            var asksAboutDirection = text.Contains("отправил")
+                || text.Contains("отправила")
+                || text.Contains("отправлено")
+                || text.Contains("пришло")
+                || text.Contains("получил")
+                || text.Contains("получатель")
+                || text.Contains("sent")
+                || text.Contains("received")
+                || text.Contains("to me")
+                || text.Contains("from me");
+
+            return asksAboutMe && asksAboutDirection;
+        }
+
+        private static JObject FirstMessageObject(JToken token)
+        {
+            var obj = token as JObject;
+            if (obj == null)
+            {
+                return null;
+            }
+
+            var messages = obj["messages"] as JArray;
+            if (messages != null)
+            {
+                return messages.OfType<JObject>().FirstOrDefault();
+            }
+
+            if (obj["is_from_me"] != null
+                || obj["is_to_me"] != null
+                || obj["direction"] != null
+                || obj["my_role"] != null)
+            {
+                return obj;
+            }
+
+            return null;
         }
 
         private static bool TrySummarizeOutlookToolResult(JToken token, out string summary)
@@ -1045,7 +1284,7 @@ namespace OutlookAI.Services
             var body = BuildBaseChatBody(messages, stream: true);
 
             var output = new StringBuilder();
-            await SendChatCompletionAsync(body, output, new ChatEventSink(), cancellationToken).ConfigureAwait(false);
+            await SendChatCompletionAsync(body, output, new ChatEventSink(), null, cancellationToken).ConfigureAwait(false);
             return output.ToString().Trim();
         }
 
@@ -1081,6 +1320,7 @@ namespace OutlookAI.Services
                 body,
                 output,
                 sink ?? new ChatEventSink(),
+                null,
                 cancellationToken).ConfigureAwait(false);
             return output.ToString().Trim();
         }

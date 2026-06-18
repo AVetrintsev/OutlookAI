@@ -373,6 +373,7 @@
     <Compile Include="Services\Tools\SearchResultProjector.cs" />
     <Compile Include="Services\Tools\LiveAdvancedSearchHost.cs" />
     <Compile Include="Services\Tools\LiveOutlookSurface.cs" />
+    <Compile Include="Services\Tools\OutlookJsonProjection.cs" />
     <Compile Include="Services\Tools\OutlookAdvancedSearchRunner.cs" />
     <Compile Include="Services\Tools\OutlookAggregateMessagesTool.cs" />
     <Compile Include="Services\Tools\OutlookCountMessagesTool.cs" />

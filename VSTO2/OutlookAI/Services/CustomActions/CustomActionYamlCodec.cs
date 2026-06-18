@@ -42,6 +42,10 @@ namespace OutlookAI.Services.CustomActions
                         sb.AppendLine("          " + line);
                     }
                     sb.AppendLine("        output: " + Scalar(action.Output ?? "chat"));
+                    sb.AppendLine("        applicability_item_type: " +
+                        Scalar(CustomActionApplicability.NormalizeItemType(action.ApplicabilityItemType)));
+                    sb.AppendLine("        applicability_direction: " +
+                        Scalar(CustomActionApplicability.NormalizeDirection(action.ApplicabilityDirection)));
                     sb.AppendLine("        disabled: " + (action.Disabled ? "true" : "false"));
                     sb.AppendLine("        context_json: " + Scalar(JsonConvert.SerializeObject(action.Context)));
                     sb.AppendLine("        allowed_tools_json: " +
@@ -232,6 +236,8 @@ namespace OutlookAI.Services.CustomActions
             return new CustomActionDefinition
             {
                 Output = "chat",
+                ApplicabilityItemType = CustomActionApplicability.All,
+                ApplicabilityDirection = CustomActionApplicability.All,
                 AllowedTools = new string[0],
                 Context = new CustomActionContext
                 {
@@ -261,6 +267,10 @@ namespace OutlookAI.Services.CustomActions
             else if (key == "description") action.Description = value;
             else if (key == "prompt") action.Prompt = value;
             else if (key == "output") action.Output = value;
+            else if (key == "applicability_item_type")
+                action.ApplicabilityItemType = CustomActionApplicability.NormalizeItemType(value);
+            else if (key == "applicability_direction")
+                action.ApplicabilityDirection = CustomActionApplicability.NormalizeDirection(value);
             else if (key == "disabled") action.Disabled = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
             else if (key == "context_json" && !string.IsNullOrWhiteSpace(value))
                 action.Context = JsonConvert.DeserializeObject<CustomActionContext>(value) ?? action.Context;

@@ -3,6 +3,24 @@
 <!-- AUTO-DEPLOYED SKELETON — Customize every section below for your project -->
 <!-- Delete this comment block when done customizing -->
 
+## Collaboration
+
+Communicate with the repository owner in Russian. Keep code identifiers, file names, commands, and established technical terms unchanged when translating them would reduce precision.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are Git-tracked Markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Local issue `Status:` values use the five default triage roles. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository with root domain documentation and ADRs. See `docs/agents/domain.md`.
+
 ## Project Overview
 <!-- What this project does, who it's for, key tech stack -->
 

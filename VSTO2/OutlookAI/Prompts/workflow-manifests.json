@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "workflows": [
+    {
+      "id": "inbox_chat",
+      "surface": "inbox_chat",
+      "default_output_contract": "plain_answer",
+      "allowed_capability_groups": [
+        "selection.read",
+        "mail.search",
+        "export",
+        "mail.write",
+        "custom.action"
+      ],
+      "default_context_mode": "metadata"
+    },
+    {
+      "id": "report_builder",
+      "surface": "reports",
+      "default_output_contract": "markdown_report",
+      "allowed_capability_groups": [
+        "mail.search",
+        "selection.read",
+        "export"
+      ],
+      "default_context_mode": "search_projection"
+    },
+    {
+      "id": "compose_edit",
+      "surface": "compose",
+      "default_output_contract": "draft_patch",
+      "allowed_capability_groups": [
+        "selection.read",
+        "mail.write"
+      ],
+      "default_context_mode": "snippet"
+    },
+    {
+      "id": "custom_action",
+      "surface": "custom_action",
+      "default_output_contract": "plain_answer",
+      "allowed_capability_groups": [
+        "selection.read",
+        "mail.search",
+        "export",
+        "mail.write",
+        "custom.action"
+      ],
+      "default_context_mode": "snippet"
+    }
+  ]
+}

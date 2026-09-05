@@ -64,6 +64,7 @@ namespace OutlookAI.Services.Tools
         public static void AddComposeContext(JObject json, ComposeStateResult state)
         {
             if (json == null || state == null) return;
+            json.Add("is_read_mode", state.IsReadMode);
             json.Add("item_type", state.ItemType ?? "mail");
             json.Add("direction", state.Direction ?? "unknown");
             json.Add("my_role", state.MyRole ?? "unknown");

@@ -8,8 +8,7 @@ namespace OutlookAI.Tests
     /// <c>Model</c>, <c>MaxBulkExportRows</c>) or call <c>Config.ResetDefaults</c>
     /// / <c>Config.LoadConfigFromPaths</c>. Without this, <c>ConfigTests</c> and
     /// <c>LiteLlmChatServiceMultiRoundTests</c> can race: one class's load/reset
-    /// stomps the static field another class is asserting on. Mirrors
-    /// <c>Services/Updates/UpdatePathsCollection.cs</c>. Members opt in via
+    /// stomps the static field another class is asserting on. Members opt in via
     /// <c>[Collection("Config")]</c>; <c>DisableParallelization</c> runs them
     /// one at a time with no shared fixture.
     /// </summary>

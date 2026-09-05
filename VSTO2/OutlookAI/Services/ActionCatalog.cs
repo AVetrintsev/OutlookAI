@@ -108,25 +108,17 @@ namespace OutlookAI.Services
                 Title = (string)(obj?["title"]),
                 Description = (string)(obj?["description"]) ?? "",
                 Prompt = (string)(obj?["prompt"]),
+                Surface = CustomActionSurface.Normalize(ReadString(obj, "surface", "Surface")),
                 Output = (string)(obj?["output"]) ?? "chat",
                 AllowTools = (bool?)(obj?["allow_tools"]) ?? false,
+                UseSkills = (bool?)(obj?["use_skills"]) ?? false,
                 AllowedTools = (obj?["allowed_tools"] as JArray)?.Values<string>().ToArray()
                     ?? new string[0],
                 ApplicabilityItemType = CustomActionApplicability.NormalizeItemType(
                     (string)(obj?["applicability_item_type"])),
                 ApplicabilityDirection = CustomActionApplicability.NormalizeDirection(
                     (string)(obj?["applicability_direction"])),
-                Context = obj?["context"]?.ToObject<CustomActionContext>()
-                    ?? new CustomActionContext
-                    {
-                        Source = "related_thread",
-                        MessageScope = "thread",
-                        FolderScope = "current_folder",
-                        ReadFilter = "all",
-                        TimeRange = "today",
-                        IncludeFullBodies = true,
-                        MaxItems = 20
-                    }
+                Context = ParseContext(obj?["context"] ?? obj?["Context"])
             };
             if (string.IsNullOrWhiteSpace(action.Id)
                 || string.IsNullOrWhiteSpace(action.Title)
@@ -135,6 +127,82 @@ namespace OutlookAI.Services
                 throw new InvalidOperationException("Invalid action in grouped catalog.");
             }
             return action;
+        }
+
+        private static CustomActionContext ParseContext(JToken token)
+        {
+            var obj = token as JObject;
+            if (obj == null)
+            {
+                return DefaultContext();
+            }
+
+            return new CustomActionContext
+            {
+                Source = ReadString(obj, "source", "Source") ?? "related_thread",
+                MessageScope = ReadString(obj, "message_scope", "MessageScope") ?? "thread",
+                FolderScope = ReadString(obj, "folder_scope", "FolderScope") ?? "current_folder",
+                ReadFilter = ReadString(obj, "read_filter", "ReadFilter") ?? "all",
+                TimeRange = ReadString(obj, "time_range", "TimeRange") ?? "today",
+                ManualFrom = ReadDateTimeOffset(obj, "manual_from", "ManualFrom"),
+                ManualTo = ReadDateTimeOffset(obj, "manual_to", "ManualTo"),
+                IncludeFullBodies = ReadBoolean(obj, "include_full_bodies", "IncludeFullBodies", true),
+                IncludeAttachments = ReadBoolean(obj, "include_attachments", "IncludeAttachments", false),
+                MaxItems = ReadInteger(obj, "max_items", "MaxItems", 20)
+            };
+        }
+
+        private static CustomActionContext DefaultContext()
+        {
+            return new CustomActionContext
+            {
+                Source = "related_thread",
+                MessageScope = "thread",
+                FolderScope = "current_folder",
+                ReadFilter = "all",
+                TimeRange = "today",
+                IncludeFullBodies = true,
+                MaxItems = 20
+            };
+        }
+
+        private static JToken ReadToken(JObject obj, string snakeCaseName, string pascalCaseName)
+        {
+            return obj?[snakeCaseName] ?? obj?[pascalCaseName];
+        }
+
+        private static string ReadString(JObject obj, string snakeCaseName, string pascalCaseName)
+        {
+            return (string)ReadToken(obj, snakeCaseName, pascalCaseName);
+        }
+
+        private static bool ReadBoolean(
+            JObject obj,
+            string snakeCaseName,
+            string pascalCaseName,
+            bool fallback)
+        {
+            return (bool?)ReadToken(obj, snakeCaseName, pascalCaseName) ?? fallback;
+        }
+
+        private static int ReadInteger(
+            JObject obj,
+            string snakeCaseName,
+            string pascalCaseName,
+            int fallback)
+        {
+            return (int?)ReadToken(obj, snakeCaseName, pascalCaseName) ?? fallback;
+        }
+
+        private static DateTimeOffset? ReadDateTimeOffset(
+            JObject obj,
+            string snakeCaseName,
+            string pascalCaseName)
+        {
+            var token = ReadToken(obj, snakeCaseName, pascalCaseName);
+            return token == null || token.Type == JTokenType.Null
+                ? (DateTimeOffset?)null
+                : token.ToObject<DateTimeOffset?>();
         }
     }
 }

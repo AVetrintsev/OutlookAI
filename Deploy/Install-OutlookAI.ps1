@@ -480,16 +480,15 @@ Write-Host "    Model    : $LiteLlmModel" -ForegroundColor Gray
 Write-Host "    Voice    : $LiteLlmVoiceModel" -ForegroundColor Gray
 Write-Host "    AI recommendations: $RecommendationsEnabledFlag" -ForegroundColor Gray
 # v2.1+ release packages ship a version.json alongside Install-OutlookAI.ps1.
-# Copy it into the install dir so the in-app updater knows what is installed.
+# Copy it into the install dir to identify the installed release for support.
 $stagedVersionJson = Join-Path $SourcePath "version.json"
 if (Test-Path $stagedVersionJson) {
     $installedVersionJson = Join-Path $InstallPath "version.json"
     Copy-Item -LiteralPath $stagedVersionJson -Destination $installedVersionJson -Force
     Write-Host "  Wrote $installedVersionJson" -ForegroundColor Gray
 } else {
-    # Backwards-compatible: older deploy ZIPs do not have version.json. The
-    # in-app updater shows "Current: (dev build)" in this case and still
-    # allows updates.
+    # Backwards-compatible: older deploy ZIPs do not have version.json.
+    # Missing release metadata must not prevent installation.
     Write-Host "  (no version.json in source path; skipping)" -ForegroundColor Gray
 }
 Write-Host "  Done." -ForegroundColor Green

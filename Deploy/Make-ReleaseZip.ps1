@@ -290,7 +290,7 @@ $details
         build_date = $buildDate
         repo = "kirklandsig/OutlookAI"
     } | ConvertTo-Json
-    # Write UTF-8 *without* BOM. The in-app updater and any downstream JSON
+    # Write UTF-8 *without* BOM. A downstream JSON
     # reader should not see a leading 0xEF 0xBB 0xBF that some parsers reject.
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText((Join-Path $staging "version.json"), $versionJson, $utf8NoBom)

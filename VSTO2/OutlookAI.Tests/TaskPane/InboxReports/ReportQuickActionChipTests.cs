@@ -32,31 +32,34 @@ namespace OutlookAI.Tests.TaskPane.InboxReports
         {
             // Spec defines the order: Digest, Conversation, Action items,
             // Project status, Stats, Out-of-office.
-            Assert.Contains("digest", _chips[0].Label, System.StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("conversation", _chips[1].Label, System.StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("action", _chips[2].Label, System.StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("project", _chips[3].Label, System.StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("stats", _chips[4].Label, System.StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("out", _chips[5].Label, System.StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(new[]
+            {
+                "📅 Дайджест недели",
+                "💬 Сводка переписки",
+                "✓ Задачи",
+                "📁 Статус проекта",
+                "📊 Статистика почты",
+                "🏖️ Пока меня не было"
+            }, _chips.Select(c => c.Label));
         }
 
         [Fact]
         public void ConversationChip_TemplateMentionsPersonPlaceholder()
         {
-            Assert.Contains("[name or email]", _chips[1].TemplateText);
+            Assert.Contains("[имя или email]", _chips[1].TemplateText);
         }
 
         [Fact]
         public void ProjectChip_TemplateMentionsTopicPlaceholder()
         {
-            Assert.Contains("[topic", _chips[3].TemplateText);
+            Assert.Contains("[тема/название проекта]", _chips[3].TemplateText);
         }
 
         [Fact]
         public void OutOfOfficeChip_TemplateMentionsDatePlaceholders()
         {
-            Assert.Contains("[start date]", _chips[5].TemplateText);
-            Assert.Contains("[end date]", _chips[5].TemplateText);
+            Assert.Contains("[дата начала]", _chips[5].TemplateText);
+            Assert.Contains("[дата окончания]", _chips[5].TemplateText);
         }
 
         [Fact]

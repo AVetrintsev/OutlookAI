@@ -9,6 +9,7 @@ namespace OutlookAI.Services.CustomActions
     public sealed class CustomActionStore
     {
         public const int CurrentSchemaVersion = 2;
+        public const string TextEditingGroupId = "text_editing";
         private const string PersonalGroupId = "my_actions";
 
         public string Path { get; }
@@ -41,7 +42,7 @@ namespace OutlookAI.Services.CustomActions
                 .OrderBy(group => group.Order)
                 .Select(group => group.Clone())
                 .ToList();
-            foreach (var baseline in ActionCatalog.Default.AssistantGroups())
+            foreach (var baseline in ActionCatalog.Default.AssistantGroups().OrderBy(group => group.Order))
             {
                 if (groups.Any(group =>
                     string.Equals(group.Id, baseline.Id, StringComparison.OrdinalIgnoreCase)))
@@ -49,13 +50,29 @@ namespace OutlookAI.Services.CustomActions
                     continue;
                 }
 
-                baseline.Order = groups.Count;
-                groups.Add(baseline);
+                var insertAt = Math.Max(0, Math.Min(baseline.Order, groups.Count));
+                groups.Insert(insertAt, baseline);
                 changed = true;
             }
 
+            foreach (var group in groups)
+            {
+                var originalActions = group.Actions ?? new CustomActionDefinition[0];
+                var actions = originalActions.Where(IsValid).ToArray();
+                if (actions.Length != originalActions.Length)
+                {
+                    changed = true;
+                }
+                if (actions.Any(action => NeedsNormalization(action, group.Id)))
+                {
+                    changed = true;
+                }
+                group.Actions = actions
+                    .Select(action => NormalizeAction(action, group.Id))
+                    .ToArray();
+            }
+
             file.Groups = groups
-                .OrderBy(group => group.Order)
                 .Select((group, index) =>
                 {
                     group.Order = index;
@@ -92,7 +109,7 @@ namespace OutlookAI.Services.CustomActions
                         copy.Order = index;
                         copy.Actions = copy.Actions
                             .Where(IsValid)
-                            .Select(NormalizeAction)
+                            .Select(action => NormalizeAction(action, copy.Id))
                             .ToArray();
                         return copy;
                     })
@@ -275,11 +292,71 @@ namespace OutlookAI.Services.CustomActions
                 && action.Context != null;
         }
 
-        private static CustomActionDefinition NormalizeAction(CustomActionDefinition action)
+        private static bool NeedsNormalization(CustomActionDefinition action, string groupId)
+        {
+            var isEditorSelection = IsEditorSelectionAction(action, groupId);
+            var expectedSurface = isEditorSelection
+                ? CustomActionSurface.EditorSelection
+                : CustomActionSurface.Assistant;
+            if (!string.Equals(action.Surface, expectedSurface, StringComparison.Ordinal)) return true;
+            if (!string.Equals(
+                action.ApplicabilityItemType,
+                CustomActionApplicability.NormalizeItemType(action.ApplicabilityItemType),
+                StringComparison.Ordinal)) return true;
+            if (!string.Equals(
+                action.ApplicabilityDirection,
+                CustomActionApplicability.NormalizeDirection(action.ApplicabilityDirection),
+                StringComparison.Ordinal)) return true;
+            if (!isEditorSelection) return false;
+            return action.Context == null
+                || !string.Equals(action.Context.Source, "selected_text", StringComparison.Ordinal)
+                || action.Context.IncludeFullBodies
+                || action.Context.IncludeAttachments
+                || action.Context.MaxItems != 1
+                || !string.Equals(action.Output, "replace_selection", StringComparison.Ordinal)
+                || action.AllowTools
+                || (action.AllowedTools?.Length ?? 0) != 0;
+        }
+
+        private static bool IsEditorSelectionAction(CustomActionDefinition action, string groupId)
+        {
+            if (string.Equals(groupId, TextEditingGroupId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            if (string.Equals(
+                CustomActionSurface.Normalize(action?.Surface),
+                CustomActionSurface.EditorSelection,
+                StringComparison.Ordinal))
+            {
+                return true;
+            }
+            return string.Equals(action?.Context?.Source, "selected_text", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(action?.Output, "replace_selection", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static CustomActionDefinition NormalizeAction(
+            CustomActionDefinition action,
+            string groupId)
         {
             var copy = action.Clone();
+            var isEditorSelection = IsEditorSelectionAction(copy, groupId);
+            copy.Surface = isEditorSelection
+                ? CustomActionSurface.EditorSelection
+                : CustomActionSurface.Assistant;
             copy.ApplicabilityItemType = CustomActionApplicability.NormalizeItemType(copy.ApplicabilityItemType);
             copy.ApplicabilityDirection = CustomActionApplicability.NormalizeDirection(copy.ApplicabilityDirection);
+            if (isEditorSelection)
+            {
+                copy.Context.Source = "selected_text";
+                copy.Context.MessageScope = "selected";
+                copy.Context.IncludeFullBodies = false;
+                copy.Context.IncludeAttachments = false;
+                copy.Context.MaxItems = 1;
+                copy.Output = "replace_selection";
+                copy.AllowTools = false;
+                copy.AllowedTools = new string[0];
+            }
             return copy;
         }
     }

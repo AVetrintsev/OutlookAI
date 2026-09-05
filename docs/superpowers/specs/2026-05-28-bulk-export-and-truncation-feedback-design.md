@@ -196,7 +196,7 @@ model -> outlook_export_search_results { filter…, columns:[…], filename_hint
 ## Rollout
 
 - Single focused plan; subagent-driven TDD with spec-compliance + code-quality
-  review per task, matching the workflow used for the in-app updater and v2.1.1.
+  review per task, matching the workflow used for v2.1.1.
 - Ships as v2.1.2. Release build is local (CI workflow still blocked by issue
   #9); publish via `Make-ReleaseZip.ps1` + `gh release create`, same as v2.1.0/1.
 - Smoke: on the RDS (or dev box), ask for a known-large list export

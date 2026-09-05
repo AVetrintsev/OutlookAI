@@ -41,6 +41,7 @@ namespace OutlookAI.Services.Tools
 
     public sealed class ComposeStateResult
     {
+        public bool IsReadMode { get; set; }
         public string Subject { get; set; }
         public IReadOnlyList<string> ToRecipients { get; set; }
         public IReadOnlyList<string> CcRecipients { get; set; }

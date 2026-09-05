@@ -11,6 +11,7 @@ using OutlookAI.Services;
 using OutlookAI.Services.Export;
 using OutlookAI.Services.Chat;
 using OutlookAI.Services.Tools;
+using OutlookAI.Services.Skills;
 using OutlookAI.TaskPane.Chat;
 
 namespace OutlookAI.TaskPane.InboxReports
@@ -32,6 +33,7 @@ namespace OutlookAI.TaskPane.InboxReports
         private readonly ConversationStore _store;
         private readonly InboxReportsPromptBuilder _promptBuilder = new InboxReportsPromptBuilder();
         private readonly ExportBridge _exportBridge;
+        private readonly SkillUiBridge _skillUi;
 
         private WebView2 _webView;
         private CancellationTokenSource _activeCts;
@@ -53,6 +55,7 @@ namespace OutlookAI.TaskPane.InboxReports
             _toolHost = toolHost ?? throw new ArgumentNullException(nameof(toolHost));
             _surface = surface;
             _store = store ?? new ConversationStore();
+            _skillUi = new SkillUiBridge(_chat, _surface);
             if (_surface != null)
             {
                 _exportBridge = new ExportBridge(_surface, CreateExportPathPolicy(), RunScript);
@@ -112,7 +115,7 @@ namespace OutlookAI.TaskPane.InboxReports
             try
             {
                 var json = e.TryGetWebMessageAsString();
-                TraceLog.Write("WebMessageReceived: " + (json?.Length > 80 ? json.Substring(0, 80) + "..." : json), "InboxReports");
+                TraceLog.Write("WebMessageReceived length=" + (json?.Length ?? 0), "InboxReports");
                 if (string.IsNullOrEmpty(json)) return;
                 var obj = JObject.Parse(json);
                 var type = (string)obj["type"] ?? "";
@@ -135,6 +138,7 @@ namespace OutlookAI.TaskPane.InboxReports
                     return;
                 }
 
+                if (await _skillUi.HandleAsync(type, payload, RunScript).ConfigureAwait(false)) return;
                 switch (type)
                 {
                     case "ready":
@@ -177,6 +181,7 @@ namespace OutlookAI.TaskPane.InboxReports
             PushTheme();
             PushReasoningOptions();
             PushReportChips();
+            _ = _skillUi.PushAsync(RunScript);
             TraceLog.Write("OnWebViewReady completed", "InboxReports");
         }
 
@@ -249,6 +254,8 @@ namespace OutlookAI.TaskPane.InboxReports
                 var ctx = new ConversationContext
                 {
                     SystemInstructions = _promptBuilder.Build(),
+                    EnableSkills = true,
+                    PinnedSkillIds = _skillUi.PinnedIds,
                     History = new System.Collections.Generic.List<JObject>(initialSnapshot),
                     IncludeWriteTools = Config.WriteToolsEnabled,
                     ReasoningEffortOverride = string.IsNullOrEmpty(reasoningOverride) ? null : reasoningOverride,
@@ -334,6 +341,7 @@ namespace OutlookAI.TaskPane.InboxReports
         {
             if (_isDisposed) return;
             _isDisposed = true;
+            _skillUi.Dispose();
             try { _activeCts?.Cancel(); } catch { }
             try { _webView?.Dispose(); } catch { }
         }
@@ -354,7 +362,7 @@ namespace OutlookAI.TaskPane.InboxReports
             }
             public override void OnToolCallStart(string callId, string name, string argsJson)
             {
-                TraceLog.Write("Sink.OnToolCallStart " + name + " args=" + (argsJson?.Length > 200 ? argsJson.Substring(0, 200) + "..." : argsJson), "WebViewSink");
+                TraceLog.Write("Sink.OnToolCallStart " + name + " argsLength=" + (argsJson?.Length ?? 0), "WebViewSink");
                 _ = _owner.RunScript("outlookai.appendToolCallCard(" +
                     JsString(callId) + ", " + JsString(name) + ", " + JsString(argsJson) + ");");
             }

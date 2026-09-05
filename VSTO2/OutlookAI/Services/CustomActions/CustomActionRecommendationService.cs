@@ -25,7 +25,9 @@ namespace OutlookAI.Services.CustomActions
         {
             var available = (groups ?? Enumerable.Empty<CustomActionGroup>())
                 .SelectMany(group => group.Actions ?? new CustomActionDefinition[0])
-                .Where(action => !action.Disabled && !string.IsNullOrWhiteSpace(action.Id))
+                .Where(action => !action.Disabled
+                    && !string.IsNullOrWhiteSpace(action.Id)
+                    && CustomActionSurface.Normalize(action.Surface) == CustomActionSurface.Assistant)
                 .GroupBy(action => action.Id, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
             if (available.Count == 0 || selection?.Messages == null || selection.Messages.Count == 0)

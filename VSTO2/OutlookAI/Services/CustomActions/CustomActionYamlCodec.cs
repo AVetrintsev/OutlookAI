@@ -41,7 +41,10 @@ namespace OutlookAI.Services.CustomActions
                     {
                         sb.AppendLine("          " + line);
                     }
+                    sb.AppendLine("        surface: " +
+                        Scalar(CustomActionSurface.Normalize(action.Surface)));
                     sb.AppendLine("        output: " + Scalar(action.Output ?? "chat"));
+                    sb.AppendLine("        use_skills: " + (action.UseSkills ? "true" : "false"));
                     sb.AppendLine("        applicability_item_type: " +
                         Scalar(CustomActionApplicability.NormalizeItemType(action.ApplicabilityItemType)));
                     sb.AppendLine("        applicability_direction: " +
@@ -235,6 +238,7 @@ namespace OutlookAI.Services.CustomActions
         {
             return new CustomActionDefinition
             {
+                Surface = CustomActionSurface.Assistant,
                 Output = "chat",
                 ApplicabilityItemType = CustomActionApplicability.All,
                 ApplicabilityDirection = CustomActionApplicability.All,
@@ -266,7 +270,9 @@ namespace OutlookAI.Services.CustomActions
             else if (key == "title") action.Title = value;
             else if (key == "description") action.Description = value;
             else if (key == "prompt") action.Prompt = value;
+            else if (key == "surface") action.Surface = CustomActionSurface.Normalize(value);
             else if (key == "output") action.Output = value;
+            else if (key == "use_skills") action.UseSkills = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
             else if (key == "applicability_item_type")
                 action.ApplicabilityItemType = CustomActionApplicability.NormalizeItemType(value);
             else if (key == "applicability_direction")

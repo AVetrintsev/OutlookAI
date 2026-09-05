@@ -5,6 +5,8 @@
 			<!-- Phase 2: compose-window ribbon button. -->
 			<tab idMso="TabNewMailMessage">
 				<group id="AIAssistantGroup" label="AI-помощник" insertAfterMso="GroupClipboard">
+					<dynamicMenu id="selectionActionsCompose" label="Изменить выделение" size="large"
+						getContent="GetSelectionMenuContent" invalidateContentOnDrop="true" imageMso="EditText" />
 					<button id="btnAIAssistant"
 							label="AI-помощник"
 							size="large"
@@ -44,6 +46,58 @@
 							imageMso="FileProperties" />
 				</group>
 			</tab>
+			<tab idMso="TabAppointment">
+				<group id="AIAssistantAppointmentGroup" label="AI-помощник">
+					<dynamicMenu id="selectionActionsAppointment" label="Изменить выделение" size="large"
+						getContent="GetSelectionMenuContent" invalidateContentOnDrop="true" imageMso="EditText" />
+					<button id="btnAIAssistantAppointment"
+							label="AI-помощник"
+							size="large"
+							onAction="OnAIAssistantClick"
+							supertip="Открыть AI-помощника и настроить действия для выделенного текста."
+							imageMso="SmartArtChangeColorsGallery" />
+					<button id="btnSettingsAppointment"
+							label="Настройки"
+							size="large"
+							onAction="OnSettingsClick"
+							supertip="Открыть настройки OutlookAI."
+							imageMso="FileProperties" />
+				</group>
+			</tab>
+			<tab idMso="TabTask">
+				<group id="AIAssistantTaskGroup" label="AI-помощник">
+					<dynamicMenu id="selectionActionsTask" label="Изменить выделение" size="large"
+						getContent="GetSelectionMenuContent" invalidateContentOnDrop="true" imageMso="EditText" />
+					<button id="btnAIAssistantTask"
+							label="AI-помощник"
+							size="large"
+							onAction="OnAIAssistantClick"
+							supertip="Открыть AI-помощника и настроить действия для выделенного текста."
+							imageMso="SmartArtChangeColorsGallery" />
+					<button id="btnSettingsTask"
+							label="Настройки"
+							size="large"
+							onAction="OnSettingsClick"
+							supertip="Открыть настройки OutlookAI."
+							imageMso="FileProperties" />
+				</group>
+			</tab>
+			<tab idMso="TabReadMessage">
+				<group id="AIAssistantReadGroup" label="AI-помощник">
+					<button id="btnAIAssistantRead" label="Анализ письма" size="large"
+						onAction="OnAIAssistantClick" imageMso="SmartArtChangeColorsGallery" />
+				</group>
+			</tab>
 		</tabs>
 	</ribbon>
+	<contextMenus>
+		<contextMenu idMso="ContextMenuText">
+			<dynamicMenu id="outlookAiSelectionMenu"
+						 label="AI-ассистент"
+						 imageMso="SmartArtChangeColorsGallery"
+						 getVisible="GetSelectionMenuVisible"
+						 getContent="GetSelectionMenuContent"
+						 invalidateContentOnDrop="true" />
+		</contextMenu>
+	</contextMenus>
 </customUI>

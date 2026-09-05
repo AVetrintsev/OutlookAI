@@ -16,10 +16,12 @@
         </button>
       </div>
       <div class="app-toolbar-right">
+        <button id="btnSkills" class="header-icon-btn" type="button" title="Настройки · Скиллы" aria-label="Настройки скиллов">⚙</button>
         <button id="btnCopy" class="header-icon-btn" type="button" title="Скопировать диалог" aria-label="Скопировать диалог">⧉</button>
       </div>
     </div>
     <div id="messages" class="messages" role="log" aria-live="polite"></div>
+    <div id="pinnedSkills" class="pinned-skills" hidden></div>
     <div class="bottom-zone">
       <div id="actionWorkspace" class="action-workspace" hidden>
         <section class="action-section">
@@ -82,6 +84,84 @@
       </div>
       <div id="groupEditorActions" class="group-editor-actions"></div>
     </div>
+    <section id="skillSettings" class="skill-settings" hidden aria-label="Настройки скиллов">
+      <div class="group-editor-header">
+        <button id="skillClose" class="icon-btn" type="button" aria-label="Вернуться к чату">‹</button>
+        <div class="custom-action-title">Настройки · Скиллы</div>
+        <button id="skillRefresh" class="icon-btn" type="button" aria-label="Обновить список" title="Обновить список">↻</button>
+      </div>
+      <div id="skillNotice" class="skill-notice" hidden>
+        <strong>Знания доступны вашей ИИ-модели</strong>
+        <p>Скиллы хранятся на этом компьютере. При запросе названия и описания, а после выбора — содержание скиллов, передаются настроенной LiteLLM-модели. Черновики из переписки также используют текст писем.</p>
+        <p>Если включено подробное логирование LLM, запросы и ответы со знаниями также попадут в локальный диагностический журнал.</p>
+        <button id="skillAcceptNotice" class="btn btn-primary" type="button">Понятно</button>
+      </div>
+      <div id="skillStatus" class="skill-status-message" role="status" aria-live="polite" hidden></div>
+      <div id="skillCatalogView" class="skill-view">
+        <div class="skill-intro">Люди, процессы и правила, которые помощник учитывает в работе.</div>
+        <div class="skill-toolbar">
+          <button id="skillCreate" class="btn btn-primary" type="button">Добавить</button>
+          <button id="skillCreateAi" class="btn btn-ghost" type="button">Создать с ИИ</button>
+          <button id="skillImport" class="btn btn-ghost" type="button">Импорт</button>
+          <button id="skillExport" class="btn btn-ghost" type="button">Экспорт</button>
+        </div>
+        <div id="skillCategories" class="skill-categories" aria-label="Разделы скиллов"></div>
+        <div id="skillList" class="skill-list"></div>
+        <div class="skill-footnote">Помощник выбирает подходящие скиллы сам. Закрепите нужные для всех запросов в этой панели. В редакторе текста знания используются только по настройке действия.</div>
+      </div>
+      <form id="skillEditor" class="skill-view" hidden>
+        <div class="skill-editor-body">
+          <div id="skillDraftNote" class="skill-draft-note" hidden></div>
+          <label class="field-label" for="skillName">Название</label>
+          <input id="skillName" class="field-input" maxlength="100" required placeholder="Например: закупки — роли и согласование">
+          <label class="field-label" for="skillCategory">Раздел</label>
+          <select id="skillCategory" class="field-input"><option value="people">Сотрудники и роли</option><option value="rules">Процессы и правила</option><option value="communication">Коммуникация</option></select>
+          <label class="field-label" for="skillDescription">Когда применять</label>
+          <textarea id="skillDescription" class="field-input" rows="2" maxlength="600" required placeholder="Краткое описание помогает ИИ выбрать этот скилл"></textarea>
+          <label class="field-label" for="skillInstructions">Знания и инструкции</label>
+          <textarea id="skillInstructions" class="field-input field-textarea" rows="9" maxlength="32000" required placeholder="Правила, обязанности, исключения и сроки"></textarea>
+          <label class="field-label" for="skillTriggers">Имена, темы и ключевые слова</label>
+          <input id="skillTriggers" class="field-input" placeholder="Закупки, договоры, проект Альфа">
+          <div class="skill-subheading">Сотрудники <button id="skillAddPerson" class="btn btn-ghost" type="button">Добавить сотрудника</button></div>
+          <div id="skillPeople"></div>
+          <div class="field-grid">
+            <label class="field-label">Проект <input id="skillProject" class="field-input" maxlength="200" placeholder="Все проекты"></label>
+            <label class="field-label">Клиент <input id="skillClient" class="field-input" maxlength="200" placeholder="Все клиенты"></label>
+            <label class="field-label">Действует с <input id="skillValidFrom" class="field-input" type="date"></label>
+            <label class="field-label">Действует до <input id="skillValidUntil" class="field-input" type="date"></label>
+          </div>
+          <label class="field-row"><input id="skillEnabled" type="checkbox" checked> Скилл включён</label>
+          <div id="skillSources" class="skill-sources"></div>
+        </div>
+        <div class="custom-action-footer">
+          <button id="skillEditorCancel" class="btn btn-ghost" type="button">Отмена</button>
+          <button id="skillSave" class="btn btn-primary" type="submit">Сохранить</button>
+        </div>
+      </form>
+      <form id="skillAiForm" class="skill-view skill-padded" hidden>
+        <label class="field-label" for="skillAiDescription">Опишите знание или изменение</label>
+        <textarea id="skillAiDescription" class="field-input field-textarea" rows="7" maxlength="12000" required placeholder="Кто за что отвечает? Какие правила должен учитывать помощник?"></textarea>
+        <label class="field-row"><input id="skillAiContext" type="checkbox"> Использовать текущую переписку</label>
+        <p class="skill-footnote">ИИ подготовит редактируемый черновик. Вы проверите сведения перед сохранением.</p>
+        <div class="skill-toolbar">
+          <button id="skillAiBack" class="btn btn-ghost" type="button">Назад</button>
+          <button id="skillAiCancel" class="btn btn-ghost" type="button" hidden>Отменить запрос</button>
+          <button id="skillAiSubmit" class="btn btn-primary" type="submit">Подготовить черновик</button>
+        </div>
+      </form>
+      <div id="skillTransfer" class="skill-view skill-padded" hidden>
+        <label id="skillTransferLabel" class="field-label" for="skillTransferText">Импорт скиллов</label>
+        <input id="skillImportFile" type="file" accept=".json,application/json">
+        <textarea id="skillTransferText" class="field-input field-textarea" rows="9" aria-label="JSON скиллов" placeholder="Вставьте JSON или выберите файл"></textarea>
+        <div id="skillImportPreview" class="skill-import-preview"></div>
+        <div class="skill-toolbar">
+          <button id="skillTransferBack" class="btn btn-ghost" type="button">Назад</button>
+          <button id="skillImportCheck" class="btn btn-primary" type="button">Проверить импорт</button>
+          <button id="skillImportApply" class="btn btn-primary" type="button" hidden>Импортировать</button>
+          <button id="skillDownload" class="btn btn-primary" type="button" hidden>Скачать JSON</button>
+        </div>
+      </div>
+    </section>
     <div id="customActionDialog" class="custom-action-dialog" hidden>
       <div class="custom-action-panel" role="dialog" aria-modal="true" aria-labelledby="customActionTitle">
         <div class="custom-action-header">
@@ -95,9 +175,13 @@
           <input id="customActionHint" class="field-input" type="text" maxlength="160">
           <label class="field-label" for="customActionPrompt">Промпт</label>
           <textarea id="customActionPrompt" class="field-input field-textarea" rows="7"></textarea>
+          <label id="customActionSkillsField" class="field-label" hidden>
+            <input id="customActionUseSkills" type="checkbox"> Использовать знания из скиллов при замене выделения
+          </label>
           <div class="field-grid">
-            <label class="field-label">Источник
+            <label id="customActionSourceField" class="field-label">Источник
               <select id="customActionSource" class="field-input">
+                <option value="selected_text" hidden>Выделенный текст в редакторе</option>
                 <option value="current_selection">Выбранные сообщения</option>
                 <option value="current_open_message">Текущее открытое сообщение</option>
                 <option value="related_thread">Вся связанная переписка</option>
@@ -141,6 +225,7 @@
                 <option value="all">Всего</option>
                 <option value="mail">Писем</option>
                 <option value="meeting">Встреч</option>
+                <option value="task">Задач</option>
               </select>
             </label>
             <label class="field-label">Направление
@@ -151,8 +236,9 @@
               </select>
             </label>
           </div>
-          <label class="field-label">Результат
+          <label id="customActionOutputField" class="field-label">Результат
             <select id="customActionOutput" class="field-input">
+              <option value="replace_selection" hidden>Заменить выделенный текст</option>
               <option value="chat">Показать в чате</option>
               <option value="create_reply">Создать ответ</option>
               <option value="create_meeting">Создать встречу</option>
@@ -194,6 +280,7 @@
     </div>
   </div>
   <script src="markdown.js"></script>
+  <script src="skills.js"></script>
   <script src="chat.js"></script>
 </body>
 </html>

@@ -209,7 +209,7 @@ namespace OutlookAI.Tests.Services
 
                 Assert.Equal(StopReason.Completed, result.StopReason);
                 Assert.Contains("Это письмо пришло вам.", result.FinalAssistantText);
-                Assert.DoesNotEqual("Это письмо отправил я или мне?", result.FinalAssistantText);
+                Assert.NotEqual("Это письмо отправил я или мне?", result.FinalAssistantText);
                 Assert.DoesNotContain("\"text\"", result.FinalAssistantText);
             }
         }

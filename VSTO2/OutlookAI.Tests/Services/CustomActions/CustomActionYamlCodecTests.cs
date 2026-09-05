@@ -12,12 +12,14 @@ namespace OutlookAI.Tests.Services.CustomActions
             var file = FileWith("Понять", "Суть письма", "old");
             file.Groups[0].Actions[0].AllowedTools = new[] { "outlook_read_message" };
             file.Groups[0].Actions[0].AllowTools = true;
+            file.Groups[0].Actions[0].Surface = CustomActionSurface.EditorSelection;
 
             var yaml = CustomActionYamlCodec.Export(file);
             var parsed = CustomActionYamlCodec.Parse(yaml);
             var action = Assert.Single(Assert.Single(parsed.Groups).Actions);
 
             Assert.Equal("Суть письма", action.Title);
+            Assert.Equal(CustomActionSurface.EditorSelection, action.Surface);
             Assert.Equal("related_thread", action.Context.Source);
             Assert.Equal("mail", action.ApplicabilityItemType);
             Assert.Equal("incoming", action.ApplicabilityDirection);
@@ -56,6 +58,31 @@ namespace OutlookAI.Tests.Services.CustomActions
             Assert.Equal("Понять", parsed.Groups[0].Title);
             Assert.Equal("Суть письма", action.Title);
             Assert.Equal("Разбери письмо.", action.Prompt);
+            Assert.Equal(CustomActionSurface.Assistant, action.Surface);
+        }
+
+        [Fact]
+        public void ExportParse_RoundTripsTaskApplicability()
+        {
+            var file = FileWith("Задачи", "Уточнить задачу", "Уточни");
+            file.Groups[0].Actions[0].ApplicabilityItemType = CustomActionApplicability.Task;
+
+            var action = Assert.Single(Assert.Single(
+                CustomActionYamlCodec.Parse(CustomActionYamlCodec.Export(file)).Groups).Actions);
+
+            Assert.Equal(CustomActionApplicability.Task, action.ApplicabilityItemType);
+        }
+
+        [Fact]
+        public void UseSkillsSurvivesYamlAndCloneWithoutEnablingOutlookTools()
+        {
+            var file = FileWith("Редактирование", "Официально", "Перепиши");
+            var action = file.Groups[0].Actions[0];
+            action.UseSkills = true;
+            var parsed = CustomActionYamlCodec.Parse(CustomActionYamlCodec.Export(file));
+            Assert.True(parsed.Groups[0].Actions[0].UseSkills);
+            Assert.True(action.Clone().UseSkills);
+            Assert.False(parsed.Groups[0].Actions[0].AllowTools);
         }
 
         private static CustomActionFile FileWith(string groupTitle, string actionTitle, string prompt)

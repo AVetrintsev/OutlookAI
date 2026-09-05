@@ -25,7 +25,7 @@
       "id": "selected_thread_summary",
       "surface": "inbox_copilot",
       "label": "Сводка переписки",
-      "prompt": "Сделай сводку выбранного сообщения и всей связанной переписки.",
+      "prompt": "Прочитай выбранное письмо и цепочку через outlook_read_conversation (до 100 сообщений). Дай суть, решения, открытые обязательства и следующий шаг. Для ответственности загрузи релевантные скиллы, если доступны. Указывай отправителя, дату и краткую цитату; отделяй явные назначения, правила и предположения. Покажи ограничения выборки и анализа вложений.",
       "selection": "single"
     },
     {
@@ -65,7 +65,7 @@
       "id": "report_tasks",
       "surface": "inbox_reports",
       "label": "✓ Задачи",
-      "prompt": "Найди задачи, которые мне нужно выполнить по письмам за последние 7 дней. Прочитай релевантные сообщения, извлеки TODO/сроки/запросы. Сгруппируй по тому, кто чего ждёт."
+      "prompt": "Найди мои обязательства по письмам за последние 7 дней. Прочитай релевантные цепочки и доступные скиллы ролей/процессов. Для каждого пункта: действие, ответственный, основание назначения, срок и подтверждение статуса (отправитель, дата, краткая цитата). Проверь поздние ответы о выполнении. Не объявляй задачу невыполненной лишь из-за отсутствия ответа; без явного срока или применимого SLA не ставь просрочку. Покажи ограничения выборки. Ничего не создавай в Outlook."
     },
     {
       "id": "report_project_status",
@@ -89,15 +89,178 @@
   "schema_version": 2,
   "groups": [
     {
+      "id": "text_editing",
+      "title": "Редактирование текста",
+      "order": 0,
+      "actions": [
+        {
+          "id": "text_editing_01",
+          "title": "Официально",
+          "description": "Переписать выделенный текст ясно, однозначно и в официально-деловом тоне.",
+          "prompt": "Перепиши выделенный текст ясно, понятно и официально. Сохрани исходный смысл, факты, имена, даты и обязательства. Устрани разговорные и двусмысленные формулировки, не добавляя новых сведений. Верни только готовый текст для замены выделения.",
+          "surface": "editor_selection",
+          "context": {
+            "source": "selected_text",
+            "message_scope": "selected",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": false,
+            "include_attachments": false,
+            "max_items": 1
+          },
+          "output": "replace_selection",
+          "allow_tools": false,
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
+        },
+        {
+          "id": "text_editing_02",
+          "title": "Структурировать",
+          "description": "Организовать выделенный текст в логичные абзацы и списки.",
+          "prompt": "Структурируй выделенный текст: выстрой логичный порядок, раздели смысловые части на короткие абзацы и используй маркированный или нумерованный список там, где это улучшает читаемость. Сохрани все факты и не добавляй новые. Верни только готовый текст для замены выделения.",
+          "surface": "editor_selection",
+          "context": {
+            "source": "selected_text",
+            "message_scope": "selected",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": false,
+            "include_attachments": false,
+            "max_items": 1
+          },
+          "output": "replace_selection",
+          "allow_tools": false,
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
+        },
+        {
+          "id": "text_editing_03",
+          "title": "Уточнить",
+          "description": "Сделать выделенную формулировку конкретнее и убрать неоднозначность.",
+          "prompt": "Уточни выделенный текст: убери неоднозначность, сделай связи, условия, ожидаемые действия и сроки конкретными настолько, насколько это позволяет исходный текст и контекст. Не придумывай отсутствующие факты; если данных недостаточно, сохрани нейтральную формулировку. Верни только готовый текст для замены выделения.",
+          "surface": "editor_selection",
+          "context": {
+            "source": "selected_text",
+            "message_scope": "selected",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": false,
+            "include_attachments": false,
+            "max_items": 1
+          },
+          "output": "replace_selection",
+          "allow_tools": false,
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
+        },
+        {
+          "id": "text_editing_04",
+          "title": "Сослаться на пункты переписки",
+          "description": "Подкрепить формулировку релевантными договорённостями из контекста переписки.",
+          "prompt": "Перепиши выделенный текст, явно сославшись на релевантные пункты, решения или договорённости из предоставленного контекста переписки. Используй только подтверждённые в контексте сведения, не придумывай ссылки, номера, даты или договорённости. Если подходящих пунктов нет, улучши формулировку без вымышленной ссылки. Верни только готовый текст для замены выделения.",
+          "surface": "editor_selection",
+          "context": {
+            "source": "selected_text",
+            "message_scope": "selected",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": false,
+            "include_attachments": false,
+            "max_items": 1
+          },
+          "output": "replace_selection",
+          "allow_tools": false,
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
+        },
+        {
+          "id": "text_editing_06",
+          "title": "Строго и прямо",
+          "description": "Чётко обозначить ожидания без грубости, угроз и новых обязательств.",
+          "prompt": "Перепиши выделенный текст строго, прямо и уважительно. Убери неопределённость и лишние вводные слова, подчеркни уже обозначенные ожидания. Не добавляй угроз, обвинений, новых сроков, полномочий и обязательств. Сохрани факты и смысл. Верни только текст для замены выделения.",
+          "surface": "editor_selection",
+          "context": {
+            "source": "selected_text",
+            "message_scope": "selected",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": false,
+            "include_attachments": false,
+            "max_items": 1
+          },
+          "output": "replace_selection",
+          "allow_tools": false,
+          "use_skills": false,
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
+        },
+        {
+          "id": "text_editing_07",
+          "title": "Мягко и дипломатично",
+          "description": "Смягчить тон, сохранив смысл, границы и ожидаемый результат.",
+          "prompt": "Перепиши выделенный текст мягко, доброжелательно и дипломатично. Снизь резкость, сохранив все факты, смысл, требования и уже заданные сроки. Не превращай требование в необязательное пожелание, не обещай уступок и не добавляй извинений за неподтверждённую вину. Верни только текст для замены выделения.",
+          "surface": "editor_selection",
+          "context": {
+            "source": "selected_text",
+            "message_scope": "selected",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": false,
+            "include_attachments": false,
+            "max_items": 1
+          },
+          "output": "replace_selection",
+          "allow_tools": false,
+          "use_skills": false,
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
+        },
+        {
+          "id": "text_editing_05",
+          "title": "Кратко",
+          "description": "Сделать выделенный текст короче без потери существенного смысла.",
+          "prompt": "Сократи выделенный текст, убрав повторы, вводные слова и второстепенные формулировки. Сохрани ключевой смысл, факты, условия, даты и ожидаемые действия. Верни только готовый текст для замены выделения.",
+          "surface": "editor_selection",
+          "context": {
+            "source": "selected_text",
+            "message_scope": "selected",
+            "folder_scope": "current_folder",
+            "read_filter": "all",
+            "time_range": "today",
+            "include_full_bodies": false,
+            "include_attachments": false,
+            "max_items": 1
+          },
+          "output": "replace_selection",
+          "allow_tools": false,
+          "allowed_tools": [],
+          "applicability_item_type": "all",
+          "applicability_direction": "all"
+        }
+      ]
+    },
+    {
       "id": "understand",
       "title": "Понять",
-      "order": 0,
+      "order": 1,
       "actions": [
         {
           "id": "understand_01",
           "title": "Суть письма",
           "description": "Кратко определить, кто пишет, по какому поводу, что важно и к чему ведёт письмо.",
-          "prompt": "Проанализируй текущее письмо и цепочку переписки. Кратко объясни:\nкто пишет, по какому поводу, в чём суть, какие важные детали есть,\nк чему ведёт письмо и какое следующее действие напрашивается.\nНе пересказывай всё подряд, выдели только управленчески значимое.",
+          "prompt": "Проанализируй текущее письмо или приглашение и доступную цепочку хронологически. Кратко: суть, подтверждённые решения, открытые вопросы и следующий шаг. Для обязанностей загрузи релевантные скиллы, если доступны. У каждого значимого вывода укажи отправителя, дату и краткую цитату. Явное поручение важнее общего правила; предположения и конфликты отмечай. Покажи неполноту цепочки, сокращение текста и отсутствие анализа содержимого вложений.",
           "context": {
             "source": "related_thread",
             "message_scope": "thread",
@@ -106,7 +269,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -118,7 +281,7 @@
           "id": "understand_02",
           "title": "Что от меня надо",
           "description": "Определить, требуется ли от меня ответ, решение, согласование, действие или контроль.",
-          "prompt": "Определи, что именно требуется от меня по этому письму.\nРаздели явные просьбы и скрытые ожидания. Укажи, нужно ли мне:\nответить, согласовать, принять решение, делегировать, назначить встречу,\nдать данные или просто принять к сведению. Если действие не требуется,\nтак и напиши.",
+          "prompt": "Определи, что требуется именно от текущего пользователя. Раздели явные просьбы, обязанности по загруженному скиллу и предположения. Не считай присутствие в копии назначением исполнителем. Укажи действие, ожидаемый результат, подтверждённый срок и основание (отправитель, дата, краткая цитата или название правила). Если действие не требуется или ответственный не определён, так и напиши.",
           "context": {
             "source": "related_thread",
             "message_scope": "thread",
@@ -127,7 +290,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -139,7 +302,7 @@
           "id": "understand_03",
           "title": "Сроки и риски",
           "description": "Найти дедлайны, просрочки, эскалации, риски и последствия бездействия.",
-          "prompt": "Найди в письме и цепочке все сроки, дедлайны, просрочки и признаки эскалации.\nОцени риски: операционные, репутационные, финансовые, юридические,\nорганизационные. Отдельно напиши, что может произойти, если не реагировать.",
+          "prompt": "Найди явные сроки, применимые SLA из загруженных скиллов и признаки эскалации. Сопоставь с датой анализа и поздними подтверждениями выполнения. Для каждого обязательства: ответственный, срок, основание срока, подтверждённый статус, источник. Отсутствие подтверждения не доказывает невыполнение: при прошедшем сроке пиши «срок прошёл, подтверждения в доступной переписке нет». Без срока не объявляй просрочку. Риски описывай как обоснованные возможности, а не свершившиеся факты.",
           "context": {
             "source": "related_thread",
             "message_scope": "thread",
@@ -148,7 +311,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -160,7 +323,7 @@
           "id": "understand_04",
           "title": "Участники и роли",
           "description": "Понять, кто инициатор, владелец вопроса, исполнитель, согласующий и наблюдатель.",
-          "prompt": "Определи участников переписки и их роли в вопросе.\nУкажи: кто инициатор, кто владелец проблемы, кто должен выполнить работу,\nкто согласует, кто информируется, кто блокирует или влияет на решение.\nЕсли роль неочевидна, отметь это как предположение.",
+          "prompt": "Определи участников по email, используя подтверждённые псевдонимы из загруженных скиллов сотрудников. Совпадение имён не доказывает личность. Для каждого: роль в вопросе, ожидаемое действие и основание. Приоритет: явное назначение в письме, применимое правило скилла, затем явно помеченное предположение. Покажи противоречия, область проекта/клиента и период правила. Не называй человека блокирующим без конкретного свидетельства.",
           "context": {
             "source": "related_thread",
             "message_scope": "thread",
@@ -169,7 +332,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -190,7 +353,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -203,7 +366,7 @@
     {
       "id": "reply",
       "title": "Ответить",
-      "order": 1,
+      "order": 2,
       "actions": [
         {
           "id": "reply_01",
@@ -218,7 +381,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -239,7 +402,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -260,7 +423,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -281,7 +444,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -302,7 +465,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -315,7 +478,7 @@
     {
       "id": "decide",
       "title": "Решить",
-      "order": 2,
+      "order": 3,
       "actions": [
         {
           "id": "decide_01",
@@ -330,7 +493,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -351,7 +514,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -372,7 +535,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -393,7 +556,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -414,7 +577,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -427,7 +590,7 @@
     {
       "id": "delegate",
       "title": "Делегировать",
-      "order": 3,
+      "order": 4,
       "actions": [
         {
           "id": "delegate_01",
@@ -442,7 +605,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -463,7 +626,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -484,7 +647,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -505,7 +668,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -526,7 +689,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -547,7 +710,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -560,7 +723,7 @@
     {
       "id": "meetings",
       "title": "Встречи",
-      "order": 4,
+      "order": 5,
       "actions": [
         {
           "id": "meetings_01",
@@ -575,7 +738,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -596,7 +759,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -617,7 +780,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -638,7 +801,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -651,7 +814,7 @@
     {
       "id": "control",
       "title": "Контроль",
-      "order": 5,
+      "order": 6,
       "actions": [
         {
           "id": "control_01",
@@ -666,7 +829,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -678,7 +841,7 @@
           "id": "control_02",
           "title": "Кого пингануть",
           "description": "Определить, у кого завис вопрос и кому нужно написать.",
-          "prompt": "Определи, у кого сейчас завис вопрос.\nУкажи, кому нужно написать, что именно запросить,\nкакой срок поставить и какой тон лучше использовать.",
+          "prompt": "Определи последнее подтверждённое состояние вопроса: какое действие ожидается и от кого. Проверь поздние ответы о выполнении и применимые скиллы. Для каждого вывода приведи отправителя, дату и короткую цитату. Не приравнивай молчание к бездействию. Укажи, кому и какой статус стоит запросить; новый срок или смену владельца формулируй только как предложение, не как уже согласованное обязательство.",
           "context": {
             "source": "related_thread",
             "message_scope": "thread",
@@ -687,7 +850,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -708,7 +871,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -729,7 +892,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -742,7 +905,7 @@
     {
       "id": "manager",
       "title": "Руководителю",
-      "order": 6,
+      "order": 7,
       "actions": [
         {
           "id": "manager_01",
@@ -757,7 +920,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -778,7 +941,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -799,7 +962,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -820,7 +983,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -841,7 +1004,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -862,7 +1025,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -875,7 +1038,7 @@
     {
       "id": "long_thread",
       "title": "Длинная цепочка",
-      "order": 7,
+      "order": 8,
       "actions": [
         {
           "id": "long_thread_01",
@@ -890,7 +1053,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -911,7 +1074,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -923,7 +1086,7 @@
           "id": "long_thread_03",
           "title": "Карта договорённостей",
           "description": "Собрать договорённости в структуру: что, кто, срок, статус.",
-          "prompt": "Собери карту договорённостей по цепочке.\nДля каждой договорённости укажи: что договорились,\nкто ответственный, срок, текущий статус и есть ли риск срыва.",
+          "prompt": "Собери карту договорённостей по хронологии цепочки. Для каждой: действие, ответственный и основание (явное назначение / применимый скилл / предположение), срок и его источник, последнее подтверждение статуса, риск. Приводи отправителя, дату и краткую цитату. Отмечай отменённые или изменённые договорённости, конфликты с правилами и неполноту доказательств. Без подтверждённого срока не ставь просрочку; отсутствие сообщения о выполнении не доказывает невыполнение.",
           "context": {
             "source": "related_thread",
             "message_scope": "thread",
@@ -932,7 +1095,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -953,7 +1116,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,
@@ -974,7 +1137,7 @@
             "time_range": "today",
             "include_full_bodies": true,
             "include_attachments": false,
-            "max_items": 20
+            "max_items": 100
           },
           "output": "chat",
           "allow_tools": false,

@@ -3,6 +3,22 @@ using System.Linq;
 
 namespace OutlookAI.Services.CustomActions
 {
+    public static class CustomActionSurface
+    {
+        public const string Assistant = "assistant";
+        public const string EditorSelection = "editor_selection";
+
+        public static string Normalize(string value)
+        {
+            return string.Equals(
+                (value ?? "").Trim(),
+                EditorSelection,
+                StringComparison.OrdinalIgnoreCase)
+                ? EditorSelection
+                : Assistant;
+        }
+    }
+
     public sealed class CustomActionFile
     {
         public int SchemaVersion { get; set; } = 2;
@@ -27,6 +43,7 @@ namespace OutlookAI.Services.CustomActions
                 Title = Title,
                 Order = Order,
                 Actions = (Actions ?? new CustomActionDefinition[0])
+                    .Where(action => action != null)
                     .Select(action => action.Clone())
                     .ToArray()
             };
@@ -39,9 +56,11 @@ namespace OutlookAI.Services.CustomActions
         public string Title { get; set; }
         public string Description { get; set; }
         public string Prompt { get; set; }
+        public string Surface { get; set; } = CustomActionSurface.Assistant;
         public CustomActionContext Context { get; set; }
         public string Output { get; set; }
         public bool AllowTools { get; set; }
+        public bool UseSkills { get; set; }
         public string[] AllowedTools { get; set; }
         public bool Disabled { get; set; }
         public string ApplicabilityItemType { get; set; }
@@ -55,9 +74,11 @@ namespace OutlookAI.Services.CustomActions
                 Title = Title,
                 Description = Description,
                 Prompt = Prompt,
+                Surface = Surface,
                 Context = Context?.Clone(),
                 Output = Output,
                 AllowTools = AllowTools,
+                UseSkills = UseSkills,
                 AllowedTools = (AllowedTools ?? new string[0]).ToArray(),
                 Disabled = Disabled,
                 ApplicabilityItemType = ApplicabilityItemType,
@@ -106,6 +127,7 @@ namespace OutlookAI.Services.CustomActions
         public const string All = "all";
         public const string Mail = "mail";
         public const string Meeting = "meeting";
+        public const string Task = "task";
         public const string Incoming = "incoming";
         public const string Outgoing = "outgoing";
         public const string Unknown = "unknown";
@@ -113,7 +135,7 @@ namespace OutlookAI.Services.CustomActions
         public static bool IsApplicable(CustomActionDefinition action, CustomActionApplicabilityContext context)
         {
             if (action == null || action.Disabled) return false;
-            var actionItemType = NormalizeApplicability(action.ApplicabilityItemType, All, Mail, Meeting);
+            var actionItemType = NormalizeApplicability(action.ApplicabilityItemType, All, Mail, Meeting, Task);
             var actionDirection = NormalizeApplicability(action.ApplicabilityDirection, All, Incoming, Outgoing);
             var itemType = NormalizeContext(context?.ItemType);
             var direction = NormalizeContext(context?.Direction);
@@ -141,7 +163,7 @@ namespace OutlookAI.Services.CustomActions
 
         public static string NormalizeItemType(string value)
         {
-            return NormalizeApplicability(value, All, Mail, Meeting);
+            return NormalizeApplicability(value, All, Mail, Meeting, Task);
         }
 
         public static string NormalizeDirection(string value)

@@ -28,6 +28,16 @@ namespace OutlookAI.Tests.Services.CustomActions
         }
 
         [Fact]
+        public void IsApplicable_TaskAction_OnlyMatchesTask()
+        {
+            var action = Action("task", "all");
+
+            Assert.True(CustomActionApplicability.IsApplicable(action, Context("task", "outgoing")));
+            Assert.False(CustomActionApplicability.IsApplicable(action, Context("mail", "outgoing")));
+            Assert.False(CustomActionApplicability.IsApplicable(action, Context("meeting", "outgoing")));
+        }
+
+        [Fact]
         public void FilterCatalog_RemovesEmptyGroups()
         {
             var catalog = new CustomActionFile
@@ -62,7 +72,7 @@ namespace OutlookAI.Tests.Services.CustomActions
             {
                 Assert.Contains(
                     CustomActionApplicability.NormalizeItemType(action.ApplicabilityItemType),
-                    new[] { "all", "mail", "meeting" });
+                    new[] { "all", "mail", "meeting", "task" });
                 Assert.Contains(
                     CustomActionApplicability.NormalizeDirection(action.ApplicabilityDirection),
                     new[] { "all", "incoming", "outgoing" });

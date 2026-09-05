@@ -59,6 +59,7 @@
   var $customActionName = document.getElementById('customActionName');
   var $customActionHint = document.getElementById('customActionHint');
   var $customActionPrompt = document.getElementById('customActionPrompt');
+  var $customActionSourceField = document.getElementById('customActionSourceField');
   var $customActionSource = document.getElementById('customActionSource');
   var $customActionFilter = document.getElementById('customActionFilter');
   var $customActionPeriod = document.getElementById('customActionPeriod');
@@ -77,6 +78,7 @@
   var $customActionApplicabilityItemType = document.getElementById('customActionApplicabilityItemType');
   var $customActionApplicabilityDirection = document.getElementById('customActionApplicabilityDirection');
   var $customActionOutput = document.getElementById('customActionOutput');
+  var $customActionOutputField = document.getElementById('customActionOutputField');
   var $customActionToolsField = document.getElementById('customActionToolsField');
   var $customActionTools = document.getElementById('customActionTools');
   var $customActionTitle = document.getElementById('customActionTitle');
@@ -484,6 +486,7 @@
   var recommendationsEnabled = false;
   var activeActionGroupId = null;
   var editingActionGroupId = null;
+  var editingCustomActionSurface = 'assistant';
 
   function toolDisplayName(name) {
     var labels = {
@@ -492,6 +495,10 @@
       outlook_list_folders: 'Список папок',
       outlook_search_messages: 'Поиск писем',
       outlook_read_message: 'Чтение письма',
+      outlook_read_conversation: 'Связанная переписка',
+      outlook_list_skills: 'Поиск скиллов',
+      outlook_load_skill: 'Загрузка знаний',
+      outlook_propose_skill_update: 'Черновик обновления скилла',
       outlook_read_messages: 'Чтение нескольких писем',
       outlook_count_messages: 'Подсчет писем',
       outlook_aggregate_messages: 'Группировка писем',
@@ -512,7 +519,9 @@
     var selected = {};
     (selectedNames || []).forEach(function(name) { selected[name] = true; });
     while ($customActionTools.firstChild) $customActionTools.removeChild($customActionTools.firstChild);
-    setFieldVisible($customActionToolsField, customActionToolCatalog.length > 0);
+    setFieldVisible(
+      $customActionToolsField,
+      customActionToolCatalog.length > 0 && !isEditorSelectionDialog());
 
     customActionToolCatalog.forEach(function(tool) {
       var label = elt('label', 'custom-action-tool');
@@ -546,21 +555,45 @@
     if (field) field.hidden = !visible;
   }
 
+  function normalizeCustomActionSurface(value) {
+    return String(value || '').toLowerCase() === 'editor_selection'
+      ? 'editor_selection'
+      : 'assistant';
+  }
+
+  function isEditorSelectionDialog() {
+    return editingActionGroupId === 'text_editing'
+      || editingCustomActionSurface === 'editor_selection';
+  }
+
   function updateCustomActionFieldVisibility() {
-    var source = $customActionSource ? $customActionSource.value : 'current_selection';
+    var isEditorSelection = isEditorSelectionDialog();
+    if (isEditorSelection) {
+      if ($customActionSource) $customActionSource.value = 'selected_text';
+      if ($customActionOutput) $customActionOutput.value = 'replace_selection';
+    }
+    var source = isEditorSelection
+      ? 'selected_text'
+      : ($customActionSource ? $customActionSource.value : 'current_selection');
     var isFolderSource = source === 'current_folder' || source === 'all_folders';
-    var hasMultipleItems = source !== 'current_open_message';
+    var hasMultipleItems = !isEditorSelection && source !== 'current_open_message';
     var isManualRange = isFolderSource && $customActionPeriod && $customActionPeriod.value === 'manual';
     var attachmentsAffectContext = !isFolderSource
       || ($customActionFullBodies && $customActionFullBodies.checked);
 
-    setFieldVisible($customActionFilterField, isFolderSource);
-    setFieldVisible($customActionPeriodField, isFolderSource);
+    setFieldVisible($customActionSourceField, !isEditorSelection);
+    setFieldVisible($customActionFilterField, !isEditorSelection && isFolderSource);
+    setFieldVisible($customActionPeriodField, !isEditorSelection && isFolderSource);
     setFieldVisible($customActionMaxItemsField, hasMultipleItems);
-    setFieldVisible($customActionManualFromField, isManualRange);
-    setFieldVisible($customActionManualToField, isManualRange);
-    setFieldVisible($customActionFullBodiesField, true);
-    setFieldVisible($customActionAttachmentsField, attachmentsAffectContext);
+    setFieldVisible($customActionManualFromField, !isEditorSelection && isManualRange);
+    setFieldVisible($customActionManualToField, !isEditorSelection && isManualRange);
+    setFieldVisible($customActionFullBodiesField, !isEditorSelection);
+    setFieldVisible($customActionAttachmentsField, !isEditorSelection && attachmentsAffectContext);
+    setFieldVisible($customActionOutputField, !isEditorSelection);
+    setFieldVisible(document.getElementById('customActionSkillsField'), isEditorSelection);
+    setFieldVisible(
+      $customActionToolsField,
+      !isEditorSelection && customActionToolCatalog.length > 0);
   }
 
   function toLocalDateTimeInput(value) {
@@ -582,20 +615,28 @@
     action = action || null;
     editingCustomActionId = action && action.id ? action.id : null;
     if (action && action.group_id) editingActionGroupId = action.group_id;
+    editingCustomActionSurface = normalizeCustomActionSurface(
+      action && action.surface || (editingActionGroupId === 'text_editing' ? 'editor_selection' : 'assistant'));
+    var isEditorSelection = isEditorSelectionDialog();
     $customActionTitle.textContent = editingCustomActionId ? 'Изменить действие' : 'Новое действие';
     $btnCustomActionSave.textContent = editingCustomActionId ? 'Сохранить' : 'Добавить';
     $customActionName.value = action && action.label || '';
     $customActionHint.value = action && action.description || '';
     $customActionPrompt.value = action && action.action_prompt || '';
-    $customActionSource.value = action && action.source || 'current_selection';
+    document.getElementById('customActionUseSkills').checked = !!(action && action.use_skills);
+    $customActionSource.value = isEditorSelection
+      ? 'selected_text'
+      : (action && action.source || 'current_selection');
     $customActionFilter.value = action && action.read_filter || 'all';
     $customActionPeriod.value = action && action.time_range || 'today';
     $customActionMaxItems.value = action && action.max_items || '20';
     $customActionManualFrom.value = toLocalDateTimeInput(action && action.manual_from);
     $customActionManualTo.value = toLocalDateTimeInput(action && action.manual_to);
-    $customActionFullBodies.checked = action ? action.include_full_bodies !== false : true;
-    $customActionAttachments.checked = !!(action && action.include_attachments);
-    var output = action && action.output || 'chat';
+    $customActionFullBodies.checked = isEditorSelection
+      ? false
+      : (action ? action.include_full_bodies !== false : true);
+    $customActionAttachments.checked = !isEditorSelection && !!(action && action.include_attachments);
+    var output = isEditorSelection ? 'replace_selection' : (action && action.output || 'chat');
     if (output === 'create_draft') output = 'create_reply';
     $customActionOutput.value = output;
     if ($customActionApplicabilityItemType) {
@@ -604,7 +645,7 @@
     if ($customActionApplicabilityDirection) {
       $customActionApplicabilityDirection.value = action && action.applicability_direction || 'all';
     }
-    renderCustomActionTools(action && action.allowed_tools || []);
+    renderCustomActionTools(isEditorSelection ? [] : (action && action.allowed_tools || []));
     updateCustomActionFieldVisibility();
     $customActionDialog.hidden = false;
     try { $customActionName.focus(); } catch (e) { /* best-effort */ }
@@ -613,6 +654,7 @@
   function closeCustomActionDialog() {
     if ($customActionDialog) $customActionDialog.hidden = true;
     editingCustomActionId = null;
+    editingCustomActionSurface = 'assistant';
   }
 
   function closeCustomActionMenu() {
@@ -685,7 +727,10 @@
     var maxItems = parseInt($customActionMaxItems && $customActionMaxItems.value || '20', 10);
     if (!isFinite(maxItems) || maxItems < 1) maxItems = 20;
     if (maxItems > 100) maxItems = 100;
-    var source = $customActionSource ? $customActionSource.value : 'current_selection';
+    var isEditorSelection = isEditorSelectionDialog();
+    var source = isEditorSelection
+      ? 'selected_text'
+      : ($customActionSource ? $customActionSource.value : 'current_selection');
     var isFolderSource = source === 'current_folder' || source === 'all_folders';
     var readFilter = isFolderSource && $customActionFilter ? $customActionFilter.value : 'all';
     var timeRange = isFolderSource && $customActionPeriod ? $customActionPeriod.value : 'today';
@@ -706,7 +751,7 @@
       api.showError('Начало периода должно быть раньше его окончания.');
       return;
     }
-    var allowedTools = selectedCustomActionTools();
+    var allowedTools = isEditorSelection ? [] : selectedCustomActionTools();
 
     postToHost({
       type: 'custom_action_create',
@@ -716,18 +761,23 @@
         title: title,
         description: ($customActionHint && $customActionHint.value || '').trim(),
         prompt: prompt,
+        surface: isEditorSelection ? 'editor_selection' : 'assistant',
         source: source,
         read_filter: readFilter,
         time_range: timeRange,
         manual_from: manualFrom,
         manual_to: manualTo,
-        max_items: source === 'current_open_message' ? 1 : maxItems,
-        include_full_bodies: !!($customActionFullBodies && $customActionFullBodies.checked),
-        include_attachments: includeAttachments,
-        output: $customActionOutput ? $customActionOutput.value : 'chat',
+        max_items: isEditorSelection || source === 'current_open_message' ? 1 : maxItems,
+        include_full_bodies: !isEditorSelection
+          && !!($customActionFullBodies && $customActionFullBodies.checked),
+        include_attachments: isEditorSelection ? false : includeAttachments,
+        output: isEditorSelection
+          ? 'replace_selection'
+          : ($customActionOutput ? $customActionOutput.value : 'chat'),
         applicability_item_type: $customActionApplicabilityItemType ? $customActionApplicabilityItemType.value : 'all',
         applicability_direction: $customActionApplicabilityDirection ? $customActionApplicabilityDirection.value : 'all',
         allow_tools: allowedTools.length > 0,
+        use_skills: isEditorSelection && document.getElementById('customActionUseSkills').checked,
         allowed_tools: allowedTools
       }
     });
@@ -956,6 +1006,11 @@
       entry.complete = true;
       entry.container.dataset.state = 'complete';
       entry.container.classList.remove('is-streaming');
+      if (typeof opts.finalText === 'string' && opts.finalText && opts.finalText !== entry.raw) {
+        entry.raw = opts.finalText;
+        entry.container.classList.add('has-content');
+        entry.content.innerHTML = renderMarkdown(entry.raw);
+      }
       if (!entry.raw) {
         entry.content.textContent = opts.stopped
           ? 'Ответ остановлен.'
@@ -986,6 +1041,10 @@
         outlook_list_folders:              'Получаю список папок',
         outlook_search_messages:           'Ищу сообщения',
         outlook_read_message:              'Читаю сообщение',
+        outlook_read_conversation:         'Читаю связанную переписку',
+        outlook_list_skills:               'Подбираю скиллы',
+        outlook_load_skill:                'Загружаю знания',
+        outlook_propose_skill_update:      'Готовлю предложение об обновлении скилла',
         outlook_count_messages:            'Считаю сообщения',
         outlook_list_recent_threads_with:  'Ищу недавние переписки',
         outlook_create_draft:              'Создаю черновик',
@@ -1056,6 +1115,20 @@
       // muted single-line error so the user sees that something failed
       // without the full JSON dump.
       if (ok) {
+        if (row.dataset.toolName === 'outlook_read_conversation') {
+          try {
+            var coverage = typeof resultJson === 'string' ? JSON.parse(resultJson) : resultJson;
+            if (coverage && coverage.coverage_summary) $messages.appendChild(elt('div', 'audit-row', coverage.coverage_summary));
+          } catch (e) { /* only show validated tool metadata */ }
+        }
+        if (row.dataset.toolName === 'outlook_propose_skill_update' && window.outlookSkills) {
+          try {
+            var proposal = typeof resultJson === 'string' ? JSON.parse(resultJson) : resultJson;
+            var proposalCard = elt('div', 'skill-proposal-card');
+            window.outlookSkills.attachProposal(proposalCard, proposal);
+            if (proposalCard.childNodes.length) $messages.appendChild(proposalCard);
+          } catch (e) { /* malformed results do not create an editable draft */ }
+        }
         renderToolResultIfHandled(callId, resultJson);
         if (row.parentNode) row.parentNode.removeChild(row);
       } else {

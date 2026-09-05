@@ -10,9 +10,9 @@ namespace OutlookAI.Tests.TaskPane.InboxCopilot
         {
             var chips = QuickActionChip.ComputeChipsForSelectionCount(0);
             Assert.Equal(3, chips.Count);
-            Assert.Contains(chips, c => c.Label == "What needs my attention?");
-            Assert.Contains(chips, c => c.Label == "Summarize unread");
-            Assert.Contains(chips, c => c.Label == "Today's emails");
+            Assert.Contains(chips, c => c.Label == "Что требует внимания?");
+            Assert.Contains(chips, c => c.Label == "Сводка непрочитанных");
+            Assert.Contains(chips, c => c.Label == "Письма за сегодня");
         }
 
         [Fact]
@@ -20,10 +20,14 @@ namespace OutlookAI.Tests.TaskPane.InboxCopilot
         {
             var chips = QuickActionChip.ComputeChipsForSelectionCount(1);
             Assert.Equal(5, chips.Count);
-            Assert.Contains(chips, c => c.Label == "Summarize this thread");
-            Assert.Contains(chips, c => c.Label == "Draft a reply");
+            Assert.Contains(chips, c => c.Label == "Сводка переписки");
+            Assert.Contains(chips, c => c.Label == "Черновик ответа");
             // Static three still present:
-            Assert.Contains(chips, c => c.Label == "Today's emails");
+            Assert.Contains(chips, c => c.Label == "Что требует внимания?");
+            Assert.Contains(chips, c => c.Label == "Сводка непрочитанных");
+            Assert.Contains(chips, c => c.Label == "Письма за сегодня");
+            Assert.DoesNotContain(chips, c => c.Label == "Сводка выбранных");
+            Assert.DoesNotContain(chips, c => c.Label == "Разобрать выбранные");
         }
 
         [Fact]
@@ -31,11 +35,13 @@ namespace OutlookAI.Tests.TaskPane.InboxCopilot
         {
             var chips = QuickActionChip.ComputeChipsForSelectionCount(3);
             Assert.Equal(5, chips.Count);
-            Assert.Contains(chips, c => c.Label == "Summarize all selected");
-            Assert.Contains(chips, c => c.Label == "Triage selected");
-            Assert.Contains(chips, c => c.Label == "What needs my attention?");
-            Assert.DoesNotContain(chips, c => c.Label == "Summarize this thread");
-            Assert.DoesNotContain(chips, c => c.Label == "Draft a reply");
+            Assert.Contains(chips, c => c.Label == "Сводка выбранных");
+            Assert.Contains(chips, c => c.Label == "Разобрать выбранные");
+            Assert.Contains(chips, c => c.Label == "Что требует внимания?");
+            Assert.Contains(chips, c => c.Label == "Сводка непрочитанных");
+            Assert.Contains(chips, c => c.Label == "Письма за сегодня");
+            Assert.DoesNotContain(chips, c => c.Label == "Сводка переписки");
+            Assert.DoesNotContain(chips, c => c.Label == "Черновик ответа");
         }
 
         [Fact]

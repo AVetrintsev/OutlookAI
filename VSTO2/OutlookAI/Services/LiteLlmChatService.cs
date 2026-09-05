@@ -36,6 +36,7 @@ namespace OutlookAI.Services
         private readonly LiteLlmCredentialService _credentials;
         private readonly HttpClient _http;
         private readonly bool _ownsHttp;
+        private readonly Skills.SkillStore _skillStore;
         private bool _disposed;
 
         public LiteLlmChatService(LiteLlmCredentialService credentials)
@@ -43,11 +44,13 @@ namespace OutlookAI.Services
         {
         }
 
-        public LiteLlmChatService(LiteLlmCredentialService credentials, HttpClient httpClient, bool ownsHttp = false)
+        public LiteLlmChatService(LiteLlmCredentialService credentials, HttpClient httpClient, bool ownsHttp = false,
+            Skills.SkillStore skillStore = null)
         {
             _credentials = credentials ?? throw new ArgumentNullException(nameof(credentials));
             _http = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _ownsHttp = ownsHttp;
+            _skillStore = skillStore;
         }
 
         public static string ChatCompletionsEndpoint
@@ -76,12 +79,42 @@ namespace OutlookAI.Services
             if (toolHost == null) throw new ArgumentNullException(nameof(toolHost));
             if (sink == null) sink = new ChatEventSink();
 
+            var skillSession = new Skills.SkillSession(toolHost, context.EnableSkills, _skillStore);
+            // Reload knowledge per turn: disabled, expired or changed skills must not
+            // be silently resent from a previous tool output in chat history.
+            var oldSkillCalls = new HashSet<string>(context.History
+                .Where(item => (string)item["type"] == "function_call"
+                    && Skills.SkillToolNames.All.Contains((string)item["name"], StringComparer.OrdinalIgnoreCase))
+                .Select(item => (string)item["call_id"]), StringComparer.Ordinal);
+            context.History.RemoveAll(item => oldSkillCalls.Contains((string)item["call_id"])
+                && ((string)item["type"] == "function_call" || (string)item["type"] == "function_call_output"));
+            var baseTools = context.AllowedToolNames ?? Tools.ToolCatalogSchema.BuildResponsesToolsArray(context.IncludeWriteTools)
+                .OfType<JObject>().Select(tool => (string)tool["name"]).ToArray();
+            context = new ConversationContext
+            {
+                History = context.History,
+                SystemInstructions = context.SystemInstructions + "\n" + skillSession.SystemInstructions
+                    + (context.SuppressSkillAttribution ? "\nВ этом запросе требуется только готовый текст для вставки: "
+                        + "не добавляй отчёт об анализе, цитирование источников и служебные подписи. Сохраняй указанный формат результата." : ""),
+                ReasoningEffortOverride = context.ReasoningEffortOverride,
+                IncludeWriteTools = context.IncludeWriteTools,
+                EnableSkills = context.EnableSkills,
+                PinnedSkillIds = context.PinnedSkillIds,
+                SuppressSkillAttribution = context.SuppressSkillAttribution,
+                AllowedToolNames = baseTools.Except(Skills.SkillToolNames.All, StringComparer.OrdinalIgnoreCase)
+                    .Concat(skillSession.Available ? Skills.SkillToolNames.All : new string[0]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+            };
+            toolHost = skillSession;
+
             context.History.Add(new JObject(
                 new JProperty("type", "message"),
                 new JProperty("role", "user"),
                 new JProperty("content", userMessage ?? "")));
 
             var appended = new List<JObject>();
+            var pinnedItems = await skillSession.LoadPinnedAsync(context.PinnedSkillIds, sink, cancellationToken).ConfigureAwait(false);
+            context.History.AddRange(pinnedItems);
+            appended.AddRange(pinnedItems);
             var result = new TurnResult();
             var allowedToolNames = context.AllowedToolNames == null
                 ? null
@@ -133,6 +166,15 @@ namespace OutlookAI.Services
 
                 if (pendingCalls.Count == 0)
                 {
+                    if (!context.SuppressSkillAttribution && skillSession.LoadedNames.Count > 0 && assistantText.Length > 0)
+                    {
+                        var names = string.Join(", ", skillSession.LoadedNames.Select(name => name.Replace("\r", " ").Replace("\n", " ")));
+                        var attribution = "\n\nИспользованы скиллы: " + names + ".";
+                        result.FinalAssistantText += attribution;
+                        var lastMessage = appended.LastOrDefault(item => (string)item["role"] == "assistant");
+                        if (lastMessage != null) lastMessage["content"] = result.FinalAssistantText;
+                        sink.OnTokenDelta(attribution);
+                    }
                     sink.OnRoundBoundary();
                     result.StopReason = StopReason.Completed;
                     result.AppendedItems = appended;
@@ -1088,11 +1130,12 @@ namespace OutlookAI.Services
             var name = (string)call["name"] ?? "";
             var args = (string)call["arguments"] ?? "{}";
             var callId = (string)call["call_id"] ?? "";
+            var isSkillCall = Skills.SkillToolNames.All.Contains(name, StringComparer.OrdinalIgnoreCase);
             try
             {
                 OutlookAI.Diagnostics.TraceLog.Write(
                     "Dispatch " + name + " call_id=" + callId
-                    + " args=" + FormatTraceArgs(args),
+                    + " args=" + (isSkillCall ? "[skill arguments omitted]" : FormatTraceArgs(args)),
                     "LiteLlmChat");
             }
             catch { }
@@ -1143,7 +1186,7 @@ namespace OutlookAI.Services
                 + "\r\ncall_id=" + callId
                 + "\r\nok=" + ok
                 + "\r\noutput:\r\n" + outputJson);
-            sink.OnToolCallResult(callId, ok, Summarize(outputJson), outputJson);
+            sink.OnToolCallResult(callId, ok, isSkillCall ? (ok ? "Скиллы обработаны" : "Ошибка скилла") : Summarize(outputJson), outputJson);
             return new DispatchedCall
             {
                 FunctionCall = new JObject(

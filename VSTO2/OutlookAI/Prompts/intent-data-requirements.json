@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "intents": [
+    {
+      "id": "message_direction",
+      "context_mode": "metadata",
+      "required_fields": ["direction", "my_role", "is_from_me", "is_to_me"],
+      "allowed_capability_groups": []
+    },
+    {
+      "id": "message_sender",
+      "context_mode": "metadata",
+      "required_fields": ["from"],
+      "allowed_capability_groups": []
+    },
+    {
+      "id": "message_recipient",
+      "context_mode": "metadata",
+      "required_fields": ["to", "cc", "my_role"],
+      "allowed_capability_groups": []
+    },
+    {
+      "id": "content_question",
+      "context_mode": "snippet",
+      "required_fields": ["body_snippet"],
+      "allowed_capability_groups": ["selection.read"]
+    },
+    {
+      "id": "mail_search",
+      "context_mode": "search_projection",
+      "required_fields": ["search_query"],
+      "allowed_capability_groups": ["mail.search", "selection.read"]
+    },
+    {
+      "id": "report_export",
+      "context_mode": "search_projection",
+      "required_fields": ["search_query"],
+      "allowed_capability_groups": ["mail.search", "export"]
+    }
+  ]
+}

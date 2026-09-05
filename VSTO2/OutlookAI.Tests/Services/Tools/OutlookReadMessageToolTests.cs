@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using OutlookAI.Services.Tools;
 using Xunit;
 
@@ -8,8 +9,10 @@ namespace OutlookAI.Tests.Services.Tools
 {
     public class OutlookReadMessageToolTests
     {
-        [Fact]
-        public async Task Execute_ProjectsMessageDetailToJson()
+        [Theory]
+        [InlineData(null, "")]
+        [InlineData("parent-message", "parent-message")]
+        public async Task Execute_ProjectsMessageDetailToJson(string replyTo, string expectedReplyTo)
         {
             var surface = new Surface
             {
@@ -34,7 +37,7 @@ namespace OutlookAI.Tests.Services.Tools
                     BodyPlaintext = "world",
                     BodyTruncated = false,
                     Attachments = new AttachmentSummary[0],
-                    InReplyToMessageId = null,
+                    InReplyToMessageId = replyTo,
                     ConversationTopic = "Hello",
                 }
             };
@@ -49,7 +52,7 @@ namespace OutlookAI.Tests.Services.Tools
             Assert.Contains("\"smtp_address\":\"bob@example.com\"", json);
             Assert.Contains("\"is_to_me\":true", json);
             Assert.Contains("\"body_plaintext\":\"world\"", json);
-            Assert.Contains("\"in_reply_to_message_id\":null", json);
+            Assert.Equal(expectedReplyTo, (string)JObject.Parse(json)["in_reply_to_message_id"]);
         }
 
         [Fact]

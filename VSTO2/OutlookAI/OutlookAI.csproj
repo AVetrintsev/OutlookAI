@@ -317,6 +317,20 @@
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
     <Compile Include="Ribbon.cs" />
+    <Compile Include="Services\Assistant\AssistantContextResolver.cs" />
+    <Compile Include="Services\Assistant\AssistantEngine.cs" />
+    <Compile Include="Services\Assistant\AssistantExecutorClient.cs" />
+    <Compile Include="Services\Assistant\AssistantInterfaces.cs" />
+    <Compile Include="Services\Assistant\AssistantModels.cs" />
+    <Compile Include="Services\Assistant\AssistantPlannerClient.cs" />
+    <Compile Include="Services\Assistant\AssistantPlanValidator.cs" />
+    <Compile Include="Services\Assistant\CapabilityCardSource.cs" />
+    <Compile Include="Services\Assistant\CapabilityModels.cs" />
+    <Compile Include="Services\Assistant\LocalCapabilityIndex.cs" />
+    <Compile Include="Services\Assistant\LocalHashEmbeddingProvider.cs" />
+    <Compile Include="Services\Assistant\NullMemoryManager.cs" />
+    <Compile Include="Services\Assistant\TextTokens.cs" />
+    <Compile Include="Services\Assistant\WorkflowManifestCatalog.cs" />
     <Compile Include="Services\Chat\ChatEventSink.cs" />
     <Compile Include="Services\Chat\ConversationContext.cs" />
     <Compile Include="Services\Chat\ConversationStore.cs" />
@@ -330,6 +344,21 @@
     <Compile Include="Services\CustomActions\CustomActionStore.cs" />
     <Compile Include="Services\CustomActions\CustomActionUiSerializer.cs" />
     <Compile Include="Services\CustomActions\CustomActionYamlCodec.cs" />
+    <Compile Include="Services\TextEditing\OutlookTextActionController.cs" />
+    <Compile Include="Services\TextEditing\TextActionCatalog.cs" />
+    <Compile Include="Services\TextEditing\TextActionHistoryStore.cs" />
+    <Compile Include="Services\TextEditing\TextActionMenuBuilder.cs" />
+    <Compile Include="Services\TextEditing\TextActionProgressForm.cs" />
+    <Compile Include="Services\TextEditing\TextActionPromptBuilder.cs" />
+    <Compile Include="Services\Skills\SkillDefinition.cs" />
+    <Compile Include="Services\TextEditing\ProtectedTextPlan.cs" />
+    <Compile Include="Services\TextEditing\WordSelectionEditor.cs" />
+    <Compile Include="Services\Skills\SkillStore.cs" />
+    <Compile Include="Services\Skills\SkillSession.cs" />
+    <Compile Include="Services\Skills\SkillDraftService.cs" />
+    <Compile Include="Services\Skills\SkillUiBridge.cs" />
+    <Compile Include="Services\Tools\ConversationResult.cs" />
+    <Compile Include="Services\Tools\LiveOutlookSurface.Conversations.cs" />
     <Compile Include="Services\LiteLlmCredentialService.cs" />
     <Compile Include="Services\LiteLlmChatService.cs" />
     <Compile Include="Services\LlmDebugLogger.cs" />
@@ -402,20 +431,6 @@
     <Compile Include="Services\Tools\ToolCatalogSchema.cs" />
     <Compile Include="Services\Tools\ToolManifestCatalog.cs" />
     <Compile Include="Services\PromptCatalog.cs" />
-    <Compile Include="Services\Updates\DownloadResult.cs" />
-    <Compile Include="Services\Updates\GitHubReleaseClient.cs" />
-    <Compile Include="Services\Updates\LaunchResult.cs" />
-    <Compile Include="Services\Updates\ReleaseInfo.cs" />
-    <Compile Include="Services\Updates\ReleaseLookupResult.cs" />
-    <Compile Include="Services\Updates\SemVer.cs" />
-    <Compile Include="Services\Updates\UpdateAvailability.cs" />
-    <Compile Include="Services\Updates\UpdateDownloader.cs" />
-    <Compile Include="Services\Updates\UpdateHistoryLog.cs" />
-    <Compile Include="Services\Updates\UpdateInstaller.cs" />
-    <Compile Include="Services\Updates\UpdateManifest.cs" />
-    <Compile Include="Services\Updates\UpdatePaths.cs" />
-    <Compile Include="Services\Updates\UpdateStartupReconciler.cs" />
-    <Compile Include="Services\Updates\VersionComparator.cs" />
     <Compile Include="Services\Variants\Tone.cs" />
     <Compile Include="Services\Variants\Variant.cs" />
     <Compile Include="Services\Variants\VariantParser.cs" />
@@ -482,6 +497,9 @@
     <EmbeddedResource Include="WebUI\chat.js">
       <LogicalName>OutlookAI.WebUI.chat.js</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="WebUI\skills.js">
+      <LogicalName>OutlookAI.WebUI.skills.js</LogicalName>
+    </EmbeddedResource>
     <Content Include="Prompts\builtin-actions.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -489,6 +507,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Prompts\tool-catalog.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Prompts\workflow-manifests.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Prompts\intent-data-requirements.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

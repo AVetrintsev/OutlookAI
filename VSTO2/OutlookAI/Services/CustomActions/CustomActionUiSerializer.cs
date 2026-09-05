@@ -9,14 +9,55 @@ namespace OutlookAI.Services.CustomActions
             CustomActionFile catalog,
             string[] recommendationIds,
             JArray tools,
-            CustomActionApplicabilityContext applicability = null)
+            CustomActionApplicabilityContext applicability = null,
+            bool includeEditorSelectionActions = true)
         {
+            var emptyTextEditingGroup = includeEditorSelectionActions
+                ? (catalog?.Groups ?? new CustomActionGroup[0])
+                    .FirstOrDefault(group => string.Equals(
+                        group.Id,
+                        CustomActionStore.TextEditingGroupId,
+                        System.StringComparison.OrdinalIgnoreCase))
+                    ?.Clone()
+                : null;
             catalog = CustomActionApplicability.FilterCatalog(catalog, applicability);
             var resettableGroups = new System.Collections.Generic.HashSet<string>(
                 ActionCatalog.Default.AssistantGroups().Select(group => group.Id),
                 System.StringComparer.OrdinalIgnoreCase);
-            var groups = new JArray((catalog?.Groups ?? new CustomActionGroup[0])
+            var visibleGroups = (catalog?.Groups ?? new CustomActionGroup[0])
                 .OrderBy(group => group.Order)
+                .Select(group =>
+                {
+                    var copy = group.Clone();
+                    if (!includeEditorSelectionActions)
+                    {
+                        copy.Actions = copy.Actions
+                            .Where(action => CustomActionSurface.Normalize(action.Surface)
+                                != CustomActionSurface.EditorSelection)
+                            .ToArray();
+                    }
+                    return copy;
+                })
+                .Where(group => group.Actions.Length > 0)
+                .ToList();
+            if (emptyTextEditingGroup != null
+                && !visibleGroups.Any(group => string.Equals(
+                    group.Id,
+                    CustomActionStore.TextEditingGroupId,
+                    System.StringComparison.OrdinalIgnoreCase)))
+            {
+                emptyTextEditingGroup.Actions = new CustomActionDefinition[0];
+                visibleGroups.Add(emptyTextEditingGroup);
+                visibleGroups = visibleGroups.OrderBy(group => group.Order).ToList();
+            }
+            var recommendationActionIds = new System.Collections.Generic.HashSet<string>(
+                visibleGroups
+                    .SelectMany(group => group.Actions)
+                    .Where(action => CustomActionSurface.Normalize(action.Surface)
+                        == CustomActionSurface.Assistant)
+                    .Select(action => action.Id),
+                System.StringComparer.OrdinalIgnoreCase);
+            var groups = new JArray(visibleGroups
                 .Select(group => new JObject(
                     new JProperty("id", group.Id),
                     new JProperty("title", group.Title),
@@ -27,7 +68,8 @@ namespace OutlookAI.Services.CustomActions
             return new JObject(
                 new JProperty("groups", groups),
                 new JProperty("recommendations_enabled", Config.RecommendationsEnabled),
-                new JProperty("recommendation_ids", new JArray(recommendationIds ?? new string[0])),
+                new JProperty("recommendation_ids", new JArray((recommendationIds ?? new string[0])
+                    .Where(recommendationActionIds.Contains))),
                 new JProperty("tools", tools ?? new JArray()));
         }
 
@@ -41,6 +83,8 @@ namespace OutlookAI.Services.CustomActions
                 new JProperty("label", action.Title),
                 new JProperty("description", action.Description ?? ""),
                 new JProperty("action_prompt", action.Prompt ?? ""),
+                new JProperty("surface", CustomActionSurface.Normalize(action.Surface)),
+                new JProperty("use_skills", action.UseSkills),
                 new JProperty("source", action.Context?.Source ?? "current_selection"),
                 new JProperty("read_filter", action.Context?.ReadFilter ?? "all"),
                 new JProperty("time_range", action.Context?.TimeRange ?? "today"),

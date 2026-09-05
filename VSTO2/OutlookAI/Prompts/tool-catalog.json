@@ -2,6 +2,53 @@
   "tools": [
     {
       "type": "function",
+      "name": "outlook_list_skills",
+      "description": "Find user-managed local skills about employees, responsibilities, processes and communication. First search by person, email, topic, project or client, then call outlook_load_skill with relevant IDs. Returns only names and descriptions for selection, not full knowledge. Omit query to discover enabled, currently active skills.",
+      "parameters": {
+        "type": "object", "properties": { "query": { "type": "string", "description": "Relevant person, email, process, project or subject." } }, "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "outlook_load_skill",
+      "description": "Load full instructions and structured people from 1–5 enabled local skills selected from outlook_list_skills. Respect project, client and validity dates. Explicit assignments in emails override skill defaults. Cite skill names and email evidence; label uncertainty and conflicts. A skill does not authorize Outlook writes.",
+      "parameters": {
+        "type": "object", "properties": { "ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 5 } }, "required": ["ids"], "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "outlook_propose_skill_update",
+      "description": "Propose an editable draft update to an already loaded skill when current emails provide evidence of changed responsibilities or rules. Does NOT save or change any knowledge. Explain the evidence in reason. Supply complete revised instructions, preserving unaffected content. The user must review and explicitly save the draft.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "reason": { "type": "string", "description": "Why the skill may be stale, citing sender, date and short email evidence." },
+          "instructions": { "type": "string", "description": "Complete revised skill instructions." },
+          "people": { "type": "array", "description": "Optional complete revised people list. Omit to preserve existing people. Never invent email addresses.", "items": {
+            "type": "object", "properties": {
+              "email": { "type": "string" }, "name": { "type": "string" }, "role": { "type": "string" },
+              "aliases": { "type": "array", "items": { "type": "string" } },
+              "responsibilities": { "type": "array", "items": { "type": "string" } }
+            }, "required": ["email", "name"], "additionalProperties": false
+          } }
+        }, "required": ["id", "reason", "instructions"], "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "outlook_read_conversation",
+      "description": "Read the Outlook conversation of a selected or open email or meeting invitation by Conversation ID across accessible folders/stores including sent and archive, up to 100 recent items returned chronologically. Use for discussion analysis, responsibilities, commitments, deadlines or checking completion; a single email is insufficient to establish missing completion. No subject-only search. Report coverage_note, truncation and unavailable messages. Attachment contents are not analyzed.",
+      "parameters": {
+        "type": "object", "properties": {
+          "message_id": { "type": "string", "description": "Known message ID, or omit for the currently selected/open item." },
+          "max_items": { "type": "integer", "minimum": 1, "maximum": 100, "description": "Default 100." }
+        }, "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
       "name": "outlook_get_current_compose_state",
       "description": "Read the current compose-window state (subject, recipients, body, thread, attachments, current_user, item_type, direction, my_role). Set include_full_body=true for the full body instead of a 1000-char summary.",
       "parameters": {

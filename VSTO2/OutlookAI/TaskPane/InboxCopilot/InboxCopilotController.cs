@@ -8,6 +8,8 @@ using Microsoft.Web.WebView2.WinForms;
 using Newtonsoft.Json.Linq;
 using OutlookAI.Diagnostics;
 using OutlookAI.Services;
+using OutlookAI.Services.Assistant;
+using OutlookAI.Services.Skills;
 using OutlookAI.Services.CustomActions;
 using OutlookAI.Services.Export;
 using OutlookAI.Services.Chat;
@@ -36,6 +38,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
         private readonly ConversationStore _store;
         private readonly Outlook.Explorer _explorer;
         private readonly ExportBridge _exportBridge;
+        private readonly SkillUiBridge _skillUi;
         private readonly CustomActionStore _customActionStore = new CustomActionStore();
         private readonly CustomActionRecommendationService _recommendationService;
         private readonly ConcurrentDictionary<string, string[]> _recommendationCache =
@@ -65,6 +68,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             _store = store ?? new ConversationStore();
             _explorer = explorer;
             _recommendationService = new CustomActionRecommendationService(_chat);
+            _skillUi = new SkillUiBridge(_chat, _surface);
             if (_surface != null)
             {
                 _exportBridge = new ExportBridge(_surface, CreateExportPathPolicy(), RunScript);
@@ -151,7 +155,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             try
             {
                 var json = e.TryGetWebMessageAsString();
-                TraceLog.Write("WebMessageReceived: " + (json?.Length > 80 ? json.Substring(0, 80) + "..." : json), "InboxCopilot");
+                TraceLog.Write("WebMessageReceived length=" + (json?.Length ?? 0), "InboxCopilot");
                 if (string.IsNullOrEmpty(json)) return;
                 var obj = JObject.Parse(json);
                 var type = (string)obj["type"] ?? "";
@@ -173,7 +177,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
                 {
                     return;
                 }
-
+                if (await _skillUi.HandleAsync(type, payload, RunScript).ConfigureAwait(false)) return;
                 switch (type)
                 {
                     case "ready":
@@ -258,6 +262,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             PushTheme();
             PushReasoningOptions();
             PushContextStripAndChips();
+            _ = _skillUi.PushAsync(RunScript);
             _ = RefreshRecommendationsAsync();
             TraceLog.Write("OnWebViewReady completed", "InboxCopilot");
         }
@@ -327,7 +332,8 @@ namespace OutlookAI.TaskPane.InboxCopilot
                     _customActionStore.LoadCatalog(),
                     null,
                     ToolManifestCatalog.Default.BuildUiToolsArray(),
-                    GetApplicabilityContext(sel));
+                    GetApplicabilityContext(sel),
+                    includeEditorSelectionActions: false);
                 _ = RunScript("outlookai.setActionCatalog(" +
                     payload.ToString(Newtonsoft.Json.Formatting.None) + ");");
             }
@@ -462,6 +468,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
                     Title = title,
                     Description = ((string)payload["description"] ?? "").Trim(),
                     Prompt = prompt,
+                    Surface = CustomActionSurface.Normalize((string)payload["surface"]),
                     Context = new CustomActionContext
                     {
                         Source = source,
@@ -487,6 +494,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
                     },
                     Output = (string)payload["output"] ?? "chat",
                     AllowTools = allowedTools.Length > 0,
+                    UseSkills = (bool?)payload["use_skills"] ?? false,
                     AllowedTools = allowedTools,
                     ApplicabilityItemType = CustomActionApplicability.NormalizeItemType(
                         (string)payload["applicability_item_type"]),
@@ -596,24 +604,33 @@ namespace OutlookAI.TaskPane.InboxCopilot
             try
             {
                 var initialSnapshot = _store.Snapshot();
-                var ctx = new ConversationContext
-                {
-                    SystemInstructions = BuildSystemInstructionsForCurrentState(),
-                    History = new System.Collections.Generic.List<JObject>(initialSnapshot),
-                    IncludeWriteTools = Config.WriteToolsEnabled,
-                    ReasoningEffortOverride = string.IsNullOrEmpty(reasoningOverride) ? null : reasoningOverride,
-                };
-
                 var sink = new WebViewSink(this, assistantId);
-                var result = await _chat.RunTurnAsync(ctx, userText, _toolHost, sink, _activeCts.Token);
+                var result = await CreateAssistantEngine().RunAsync(
+                    new TurnRequest
+                    {
+                        Surface = "inbox_chat",
+                        PinnedSkillIds = _skillUi.PinnedIds,
+                        WorkflowId = "inbox_chat",
+                        ConversationId = "inbox_copilot",
+                        UserText = userText ?? "",
+                        Locale = "ru-RU",
+                        FolderName = GetCurrentFolderName(),
+                        UnreadCount = GetUnreadCount(),
+                        TotalCount = GetTotalCount(),
+                        ReasoningEffortOverride = string.IsNullOrEmpty(reasoningOverride) ? null : reasoningOverride,
+                        History = new System.Collections.Generic.List<JObject>(initialSnapshot)
+                    },
+                    sink,
+                    _activeCts.Token).ConfigureAwait(false);
 
-                for (int i = initialSnapshot.Count; i < ctx.History.Count; i++)
+                foreach (var item in result.TurnResult.AppendedItems ?? new JObject[0])
                 {
-                    _store.Append(ctx.History[i]);
+                    _store.Append(item);
                 }
                 var opts = new JObject(
-                    new JProperty("stopped", result.StopReason == StopReason.Cancelled),
-                    new JProperty("error", result.StopReason == StopReason.Error));
+                    new JProperty("stopped", result.TurnResult.StopReason == StopReason.Cancelled),
+                    new JProperty("error", result.TurnResult.StopReason == StopReason.Error),
+                    new JProperty("finalText", result.TurnResult.FinalAssistantText ?? ""));
                 await RunScript("outlookai.finalizeAssistantMessage(" + JsString(assistantId) + ", " +
                                 opts.ToString(Newtonsoft.Json.Formatting.None) + ");");
             }
@@ -634,6 +651,40 @@ namespace OutlookAI.TaskPane.InboxCopilot
                 await RunScript("outlookai.setComposerEnabled(true, false);");
                 TraceLog.Write("<< StartTurnAsync", "InboxCopilot");
             }
+        }
+
+        private IAssistantEngine CreateAssistantEngine()
+        {
+            var capabilities = new LocalCapabilityIndex(
+                new CapabilityCardSource(_customActionStore),
+                new LocalHashEmbeddingProvider(),
+                Config.WriteToolsEnabled);
+            return new AssistantEngine(
+                _surface,
+                capabilities,
+                new AssistantPlannerClient(_chat),
+                new AssistantPlanValidator(),
+                new AssistantContextResolver(),
+                new AssistantExecutorClient(_chat, _toolHost),
+                Config.WriteToolsEnabled);
+        }
+
+        private string GetCurrentFolderName()
+        {
+            try { return _explorer?.CurrentFolder?.Name ?? "Inbox"; }
+            catch { return "Inbox"; }
+        }
+
+        private int GetUnreadCount()
+        {
+            try { return _explorer?.CurrentFolder?.UnReadItemCount ?? 0; }
+            catch { return 0; }
+        }
+
+        private int GetTotalCount()
+        {
+            try { return _explorer?.CurrentFolder?.Items?.Count ?? 0; }
+            catch { return 0; }
         }
 
         private string BuildSystemInstructionsForCurrentState()
@@ -680,7 +731,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             }
             if (!CustomActionApplicability.IsApplicable(action, GetApplicabilityContext()))
             {
-                await RunScript("outlookai.showError(" + JsString("Действие недоступно для текущего письма или встречи.") + ");");
+                await RunScript("outlookai.showError(" + JsString("Действие недоступно для текущего письма, встречи или задачи.") + ");");
                 return;
             }
 
@@ -693,7 +744,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
 
             try
             {
-                var runner = new CustomActionRunner(_chat, _surface, _toolHost);
+                var runner = new CustomActionRunner(_chat, _surface, _toolHost, pinnedSkillIds: _skillUi.PinnedIds);
                 var sink = new WebViewSink(this, assistantId);
                 var result = await runner.RunAsync(action, _activeCts.Token, sink).ConfigureAwait(false);
                 if (!sink.HasReceivedText && !string.IsNullOrEmpty(result.Text))
@@ -788,6 +839,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
         {
             if (_isDisposed) return;
             _isDisposed = true;
+            _skillUi.Dispose();
             try { _activeCts?.Cancel(); } catch { }
             try { _recommendationCts?.Cancel(); } catch { }
             try { _recommendationCts?.Dispose(); } catch { }
@@ -821,7 +873,7 @@ namespace OutlookAI.TaskPane.InboxCopilot
             }
             public override void OnToolCallStart(string callId, string name, string argsJson)
             {
-                TraceLog.Write("Sink.OnToolCallStart " + name + " args=" + (argsJson?.Length > 200 ? argsJson.Substring(0, 200) + "..." : argsJson), "WebViewSink");
+                TraceLog.Write("Sink.OnToolCallStart " + name + " argsLength=" + (argsJson?.Length ?? 0), "WebViewSink");
                 _ = _owner.RunScript("outlookai.appendToolCallCard(" +
                     JsString(callId) + ", " + JsString(name) + ", " + JsString(argsJson) + ");");
             }

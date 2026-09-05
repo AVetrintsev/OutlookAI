@@ -4,6 +4,7 @@ using Outlook = Microsoft.Office.Interop.Outlook;
 using OutlookAI.Diagnostics;
 using OutlookAI.Services;
 using OutlookAI.Services.Export;
+using OutlookAI.Services.TextEditing;
 using OutlookAI.TaskPane;
 using OutlookAI.TaskPane.InboxCopilot;
 
@@ -18,6 +19,7 @@ namespace OutlookAI
         public IdResolver IdResolver { get; private set; }
         public OutlookAI.Services.Tools.IOutlookAdvancedSearchRunner AdvancedSearchRunner { get; private set; }
         public OutlookAI.Services.Tools.IFolderClassifier FolderClassifier { get; private set; }
+        public OutlookTextActionController TextActionController { get; private set; }
         private PdfRenderer _pdfRenderer;
         public PdfRenderer PdfRenderer => _pdfRenderer ?? (_pdfRenderer = new PdfRenderer());
         private ExportPathResolver _exportPathResolver;
@@ -44,9 +46,6 @@ namespace OutlookAI
                 TraceLog.Write("UnobservedTaskException: " + ev.Exception, "GlobalEx");
                 ev.SetObserved();
             };
-
-            try { OutlookAI.Services.Updates.UpdateStartupReconciler.Reconcile(new OutlookAI.Services.Updates.UpdateHistoryLog()); }
-            catch { /* never block startup */ }
 
             try
             {
@@ -83,6 +82,10 @@ namespace OutlookAI
                 }
                 OutlookMarshaller = new OutlookThreadMarshaller(syncCtx);
                 IdResolver = new IdResolver();
+                TextActionController = new OutlookTextActionController(
+                    this.Application,
+                    OutlookMarshaller,
+                    ChatService);
                 TraceLog.Write("Services initialized OK; marshaller _uiThreadId=" + OutlookMarshaller.UiThreadId, "ThisAddIn");
 
                 // Phase 3b: shared AdvancedSearch host + runner. One host
@@ -114,6 +117,8 @@ namespace OutlookAI
                 catch (Exception ex) { TraceLog.Write("Host dispose: " + ex.Message, "ThisAddIn"); }
                 try { _pdfRenderer?.Dispose(); }
                 catch (Exception ex) { TraceLog.Write("PDF renderer dispose: " + ex.Message, "ThisAddIn"); }
+                try { TextActionController?.Dispose(); }
+                catch (Exception ex) { TraceLog.Write("Text action controller dispose: " + ex.Message, "ThisAddIn"); }
 
                 VoiceService?.Dispose();
                 ChatService?.Dispose();
@@ -155,7 +160,7 @@ namespace OutlookAI
                 // Fallback: no compose window or inbox view in focus.
                 TraceLog.Write("No Inspector or Explorer active; showing info dialog", "ThisAddIn");
                 System.Windows.Forms.MessageBox.Show(
-                    "Откройте папку Входящие или окно создания письма, затем нажмите AI-помощник.",
+                    "Откройте папку Входящие или окно письма, встречи либо задачи, затем нажмите AI-помощник.",
                     "AI-помощник",
                     System.Windows.Forms.MessageBoxButtons.OK,
                     System.Windows.Forms.MessageBoxIcon.Information);

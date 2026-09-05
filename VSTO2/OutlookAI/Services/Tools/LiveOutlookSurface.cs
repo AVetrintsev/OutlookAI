@@ -23,7 +23,7 @@ namespace OutlookAI.Services.Tools
     /// graceful defaults (null/empty) so the tool layer can surface a
     /// structured <c>{"error":...}</c> back to the model.
     /// </summary>
-    public sealed class LiveOutlookSurface : IOutlookSurface
+    public sealed partial class LiveOutlookSurface : IOutlookSurface, IConversationSurface
     {
         private readonly Outlook.Application _application;
         private readonly OutlookThreadMarshaller _marshaller;
@@ -65,7 +65,76 @@ namespace OutlookAI.Services.Tools
             Run(() =>
             {
                 if (_composeInspector == null) return EmptyCompose();
-                var item = _composeInspector.CurrentItem as Outlook.MailItem;
+                var currentItem = _composeInspector.CurrentItem;
+                var currentUser = GetCurrentUserIdentity();
+                if (currentItem is Outlook.MeetingItem || (currentItem is Outlook.MailItem readMail && readMail.Sent))
+                {
+                    var detail = BuildSelectionDetail(currentItem, true);
+                    if (detail == null) return EmptyCompose();
+                    bool readBodyTruncated;
+                    var readBody = LimitComposeBody(detail.BodyPlaintext, includeFullBody, out readBodyTruncated);
+                    return new ComposeStateResult
+                    {
+                        IsReadMode = true, Subject = detail.Subject, CurrentUser = detail.CurrentUser,
+                        ToRecipients = detail.To, CcRecipients = detail.Cc, BccRecipients = new string[0],
+                        SenderName = detail.From, SenderEmail = OutlookContextClassifier.ExtractEmail(detail.From),
+                        ItemType = detail.ItemType, Direction = detail.Direction, MyRole = detail.MyRole,
+                        BodyPlaintext = readBody, BodyTruncated = detail.BodyTruncated || readBodyTruncated,
+                        Attachments = detail.Attachments
+                    };
+                }
+                if (currentItem is Outlook.AppointmentItem appointment)
+                {
+                    bool appointmentBodyTruncated;
+                    var appointmentBody = LimitComposeBody(
+                        appointment.Body,
+                        includeFullBody,
+                        out appointmentBodyTruncated);
+                    return new ComposeStateResult
+                    {
+                        Subject = appointment.Subject ?? "",
+                        ToRecipients = SplitAddresses(appointment.RequiredAttendees),
+                        CcRecipients = SplitAddresses(appointment.OptionalAttendees),
+                        BccRecipients = new string[0],
+                        SenderName = currentUser.DisplayName ?? "",
+                        SenderEmail = currentUser.SmtpAddress ?? "",
+                        CurrentUser = currentUser,
+                        ItemType = "meeting",
+                        Direction = "outgoing",
+                        MyRole = "organizer",
+                        BodyPlaintext = appointmentBody,
+                        BodyTruncated = appointmentBodyTruncated,
+                        Attachments = ReadAttachmentSummaries(appointment.Attachments),
+                        InReplyTo = null
+                    };
+                }
+                if (currentItem is Outlook.TaskItem task)
+                {
+                    bool taskBodyTruncated;
+                    var taskBody = LimitComposeBody(task.Body, includeFullBody, out taskBodyTruncated);
+                    var owner = (task.Owner ?? "").Trim();
+                    return new ComposeStateResult
+                    {
+                        Subject = task.Subject ?? "",
+                        ToRecipients = string.IsNullOrWhiteSpace(owner)
+                            ? new string[0]
+                            : new[] { owner },
+                        CcRecipients = new string[0],
+                        BccRecipients = new string[0],
+                        SenderName = currentUser.DisplayName ?? "",
+                        SenderEmail = currentUser.SmtpAddress ?? "",
+                        CurrentUser = currentUser,
+                        ItemType = "task",
+                        Direction = "outgoing",
+                        MyRole = "owner",
+                        BodyPlaintext = taskBody,
+                        BodyTruncated = taskBodyTruncated,
+                        Attachments = ReadAttachmentSummaries(task.Attachments),
+                        InReplyTo = null
+                    };
+                }
+
+                var item = currentItem as Outlook.MailItem;
                 if (item == null) return EmptyCompose();
 
                 var body = item.Body ?? "";
@@ -127,8 +196,6 @@ namespace OutlookAI.Services.Tools
                 }
                 catch (COMException) { /* ignore */ }
                 catch (Exception) { /* defensive */ }
-
-                var currentUser = GetCurrentUserIdentity();
 
                 return new ComposeStateResult
                 {
@@ -382,7 +449,7 @@ namespace OutlookAI.Services.Tools
             bool truncated = false;
             if (includeBody)
             {
-                try { body = item.Body ?? ""; } catch (COMException) { }
+                try { body = item.Body ?? ""; } catch (COMException) { truncated = true; }
                 if (body.Length > MaxBodyChars)
                 {
                     body = body.Substring(0, MaxBodyChars);
@@ -1606,6 +1673,35 @@ namespace OutlookAI.Services.Tools
         {
             var code = (uint)ex.HResult & 0xFFFF;
             return code == 39 || code == 112;
+        }
+
+        private static string LimitComposeBody(string body, bool includeFullBody, out bool truncated)
+        {
+            body = body ?? "";
+            truncated = false;
+            var limit = includeFullBody ? MaxBodyChars : 1000;
+            if (body.Length <= limit) return body;
+            truncated = true;
+            return body.Substring(0, limit);
+        }
+
+        private static IReadOnlyList<AttachmentSummary> ReadAttachmentSummaries(Outlook.Attachments attachments)
+        {
+            var results = new List<AttachmentSummary>();
+            if (attachments == null) return results;
+            try
+            {
+                foreach (Outlook.Attachment attachment in attachments)
+                {
+                    results.Add(new AttachmentSummary
+                    {
+                        Filename = attachment.FileName,
+                        SizeBytes = attachment.Size
+                    });
+                }
+            }
+            catch (COMException) { }
+            return results;
         }
 
         private static ComposeStateResult EmptyCompose() => new ComposeStateResult

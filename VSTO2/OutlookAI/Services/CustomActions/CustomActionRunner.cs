@@ -7,6 +7,7 @@ using Newtonsoft.Json.Linq;
 using OutlookAI.Services.Chat;
 using OutlookAI.Services.Export;
 using OutlookAI.Services.Tools;
+using OutlookAI.Services.Skills;
 
 namespace OutlookAI.Services.CustomActions
 {
@@ -21,17 +22,21 @@ namespace OutlookAI.Services.CustomActions
         private readonly IOutlookSurface _surface;
         private readonly IToolHost _toolHost;
         private readonly CustomActionStateStore _state;
+        private readonly string[] _pinnedSkillIds;
+        private string _coverageSummary;
 
         public CustomActionRunner(
             LiteLlmChatService chat,
             IOutlookSurface surface,
             IToolHost toolHost = null,
-            CustomActionStateStore state = null)
+            CustomActionStateStore state = null,
+            string[] pinnedSkillIds = null)
         {
             _chat = chat ?? throw new ArgumentNullException(nameof(chat));
             _surface = surface ?? throw new ArgumentNullException(nameof(surface));
             _toolHost = toolHost;
             _state = state ?? new CustomActionStateStore();
+            _pinnedSkillIds = pinnedSkillIds ?? new string[0];
         }
 
         public async Task<CustomActionRunResult> RunAsync(
@@ -46,7 +51,7 @@ namespace OutlookAI.Services.CustomActions
             {
                 return new CustomActionRunResult
                 {
-                    Text = "Действие недоступно для текущего письма или встречи.",
+                    Text = "Действие недоступно для текущего письма, встречи или задачи.",
                     Output = "chat"
                 };
             }
@@ -68,29 +73,29 @@ namespace OutlookAI.Services.CustomActions
                 .ToArray();
             var output = NormalizeOutput(action.Output);
             var responseSink = IsOutlookDraftOutput(output) ? new ChatEventSink() : sink;
-            string text;
-            if (allowedTools.Length > 0 && _toolHost != null)
+            var turn = await _chat.RunTurnAsync(
+                new ConversationContext
+                {
+                    SystemInstructions = PromptCatalog.Default.Get("custom_action_controlled"),
+                    IncludeWriteTools = allowedTools.Any(ToolManifestCatalog.IsWriteTool),
+                    AllowedToolNames = _toolHost == null ? new string[0] : allowedTools,
+                    EnableSkills = true,
+                    PinnedSkillIds = _pinnedSkillIds,
+                    SuppressSkillAttribution = IsOutlookDraftOutput(output)
+                },
+                userMessage,
+                _toolHost ?? new SkillSession(null, false),
+                responseSink,
+                ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (turn.StopReason != StopReason.Completed)
+                throw new InvalidOperationException("ИИ не завершил действие. Изменения не применены; повторите запрос.");
+            var text = turn.FinalAssistantText ?? "";
+            if (!IsOutlookDraftOutput(output) && !string.IsNullOrEmpty(_coverageSummary))
             {
-                var turn = await _chat.RunTurnAsync(
-                    new ConversationContext
-                    {
-                        SystemInstructions = PromptCatalog.Default.Get("custom_action_controlled"),
-                        IncludeWriteTools = allowedTools.Any(ToolManifestCatalog.IsWriteTool),
-                        AllowedToolNames = allowedTools
-                    },
-                    userMessage,
-                    _toolHost,
-                    responseSink,
-                    ct).ConfigureAwait(false);
-                text = turn.FinalAssistantText ?? "";
-            }
-            else
-            {
-                text = await _chat.CompleteWithoutToolsAsync(
-                    PromptCatalog.Default.Get("custom_action_controlled"),
-                    userMessage,
-                    responseSink,
-                    ct).ConfigureAwait(false);
+                var notice = "\n\n" + _coverageSummary;
+                text += notice;
+                responseSink.OnTokenDelta(notice);
             }
 
             var result = ApplyOutput(action, output, text, ct);
@@ -134,6 +139,7 @@ namespace OutlookAI.Services.CustomActions
 
         private string BuildContext(CustomActionDefinition action, CancellationToken ct)
         {
+            _coverageSummary = null;
             var ctx = action.Context ?? new CustomActionContext();
             var source = Normalize(ctx.Source, "current_selection");
             if (source == "current_open_message")
@@ -157,37 +163,10 @@ namespace OutlookAI.Services.CustomActions
 
             if (source == "related_thread")
             {
-                var selection = _surface.GetCurrentSelection(
-                    includeFullBodies: false,
-                    maxItems: 1);
-                var selected = selection?.Messages?.FirstOrDefault();
-                var topic = selected?.ConversationTopic;
-                if (string.IsNullOrWhiteSpace(topic)) topic = selected?.Subject;
-                if (!string.IsNullOrWhiteSpace(topic))
-                {
-                    var threadSearch = _surface.SearchMessages(new SearchMessagesArgs
-                    {
-                        Scope = "current_folder",
-                        SubjectContains = topic,
-                        MaxResults = Clamp(ctx.MaxItems, 1, 100, 20)
-                    }, ct);
-                    var threadIds = threadSearch?.Messages?
-                        .Select(message => message.Id)
-                        .Where(id => !string.IsNullOrWhiteSpace(id))
-                        .ToArray() ?? new string[0];
-                    if (threadIds.Length > 0)
-                    {
-                        var threadDetails = _surface.ReadMessages(
-                            threadIds,
-                            includeBody: ctx.IncludeFullBodies,
-                            maxItems: threadIds.Length,
-                            ct: ct);
-                        return FormatDetails(threadDetails, ctx.IncludeAttachments);
-                    }
-                }
-                return FormatSelection(
-                    _surface.GetCurrentSelection(ctx.IncludeFullBodies, Clamp(ctx.MaxItems, 1, 100, 20)),
-                    ctx.IncludeAttachments);
+                var conversation = ConversationResult.ReadCurrent(_surface, Clamp(ctx.MaxItems, 1, 100, 100), ct);
+                _coverageSummary = conversation.CoverageSummary;
+                if (!ctx.IncludeFullBodies) _coverageSummary += " Настройка действия исключает тела писем: переданы только метаданные.";
+                return conversation.ToJson(ctx.IncludeFullBodies, ctx.IncludeAttachments).ToString(Newtonsoft.Json.Formatting.None);
             }
 
             if (source == "current_selection" || source == "selected_messages")

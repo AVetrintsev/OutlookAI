@@ -23,7 +23,7 @@ namespace OutlookAI.Tests.Services.CustomActions
             Config.Model = "company/default";
             var fake = new FakeHttpMessageHandler();
             fake.QueueSse(HttpStatusCode.OK,
-                "data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"action_ids\\\":[\\\"a2\\\",\\\"missing\\\",\\\"a2\\\",\\\"a1\\\"]}\"}}]}\n\n"
+                "data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"action_ids\\\":[\\\"inline\\\",\\\"a2\\\",\\\"missing\\\",\\\"a2\\\",\\\"a1\\\"]}\"}}]}\n\n"
                 + "data: [DONE]\n\n");
 
             using (var credentials = new LiteLlmCredentialService())
@@ -45,7 +45,13 @@ namespace OutlookAI.Tests.Services.CustomActions
                         {
                             Id = "g",
                             Title = "Группа",
-                            Actions = new[] { Action("a1"), Action("a2"), Action("a2") }
+                            Actions = new[]
+                            {
+                                Action("a1"),
+                                Action("a2"),
+                                Action("a2"),
+                                Action("inline", CustomActionSurface.EditorSelection)
+                            }
                         }
                     },
                     CancellationToken.None);
@@ -53,6 +59,7 @@ namespace OutlookAI.Tests.Services.CustomActions
                 Assert.Equal(new[] { "a2", "a1" }, result);
                 Assert.Contains("a1", fake.RequestBodies[0]);
                 Assert.Contains("Тема", fake.RequestBodies[0]);
+                Assert.DoesNotContain("inline", fake.RequestBodies[0]);
             }
         }
 
@@ -71,13 +78,16 @@ namespace OutlookAI.Tests.Services.CustomActions
             Assert.Equal("one|two", CustomActionRecommendationService.CacheKey(selection));
         }
 
-        private static CustomActionDefinition Action(string id)
+        private static CustomActionDefinition Action(
+            string id,
+            string surface = CustomActionSurface.Assistant)
         {
             return new CustomActionDefinition
             {
                 Id = id,
                 Title = id,
                 Prompt = id,
+                Surface = surface,
                 Context = new CustomActionContext { Source = "current_selection" }
             };
         }
